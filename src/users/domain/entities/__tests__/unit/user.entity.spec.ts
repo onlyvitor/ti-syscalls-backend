@@ -88,6 +88,7 @@ describe('User Entity Unit Tests', () => {
       const user = User.create(userProps);
 
       expect(user.getName()).toBe(userProps.name);
+      expect(typeof user.getName()).toBe('string');
     });
   });
 });
