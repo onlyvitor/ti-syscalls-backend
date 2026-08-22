@@ -10,7 +10,6 @@ export class UsersService {
     // Aqui voce conterá a logica de negocio de criar usuario (validar,
     // hash da senha, persistir via repository) quando existir.
     const user = User.create({
-      id: 1,
       name: createUserDto.name,
       email: createUserDto.email,
       password: createUserDto.password,

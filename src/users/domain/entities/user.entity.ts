@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Email } from './email.vo';
 
 export enum UserRole {
@@ -7,23 +8,24 @@ export enum UserRole {
 }
 
 export class User {
+  private readonly id: string;
+
   private constructor(
-    private readonly id: number,
     private name: string,
     private email: Email,
     private password: string,
     private role: UserRole,
-  ) {}
+  ) {
+    this.id = randomUUID();
+  }
 
   static create(data: {
-    id: number;
     name: string;
     email: string;
     password: string;
     role: UserRole;
   }): User {
     return new User(
-      data.id,
       data.name.trim(),
       Email.create(data.email),
       data.password,
@@ -46,7 +48,7 @@ export class User {
     this.role = newRole;
   }
 
-  getId(): number {
+  getId(): string {
     return this.id;
   }
 

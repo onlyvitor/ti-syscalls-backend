@@ -1,12 +1,14 @@
 import { User, UserRole } from '../../user.entity';
 import { beforeEach, describe, expect, it } from '@jest/globals';
 
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 describe('User Entity Unit Tests', () => {
   let user: User;
 
   beforeEach(() => {
     user = User.create({
-      id: 1,
       name: 'John Doe',
       email: 'john.doe@example.com',
       password: 'securePassword123',
@@ -17,7 +19,7 @@ describe('User Entity Unit Tests', () => {
   describe('constructor / create', () => {
     it('should create a valid user with correct properties', () => {
       expect(user).toBeInstanceOf(User);
-      expect(user.getId()).toBe(1);
+      expect(user.getId()).toMatch(UUID_REGEX);
       expect(user.getName()).toBe('John Doe');
       expect(user.getEmail()).toBe('john.doe@example.com');
       expect(user.getRole()).toBe(UserRole.USER);
@@ -25,9 +27,20 @@ describe('User Entity Unit Tests', () => {
       expect(user.hasPassword('wrong-password')).toBe(false);
     });
 
+    it('should generate a unique UUID for each user instance', () => {
+      const anotherUser = User.create({
+        name: 'Jane Doe',
+        email: 'jane.doe@example.com',
+        password: 'securePassword123',
+        role: UserRole.USER,
+      });
+
+      expect(user.getId()).not.toBe(anotherUser.getId());
+      expect(anotherUser.getId()).toMatch(UUID_REGEX);
+    });
+
     it('should trim the name when creating a user', () => {
       const createdUser = User.create({
-        id: 2,
         name: '   Jane Doe   ',
         email: 'jane.doe@example.com',
         password: 'securePassword123',
@@ -39,7 +52,6 @@ describe('User Entity Unit Tests', () => {
 
     it('should create a user with different roles', () => {
       const adminUser = User.create({
-        id: 3,
         name: 'Admin User',
         email: 'admin@example.com',
         password: 'adminPassword',
@@ -52,7 +64,6 @@ describe('User Entity Unit Tests', () => {
     it('should throw an error if an invalid email is provided', () => {
       expect(() =>
         User.create({
-          id: 4,
           name: 'Invalid Email User',
           email: 'invalid-email',
           password: 'password123',
@@ -64,7 +75,6 @@ describe('User Entity Unit Tests', () => {
     it('should throw an error if an empty email is provided', () => {
       expect(() =>
         User.create({
-          id: 5,
           name: 'Empty Email User',
           email: '   ',
           password: 'password123',
@@ -75,9 +85,9 @@ describe('User Entity Unit Tests', () => {
   });
 
   describe('getters', () => {
-    it('should return the user id with getId()', () => {
-      expect(user.getId()).toBe(1);
-      expect(typeof user.getId()).toBe('number');
+    it('should return the user id as a UUID string with getId()', () => {
+      expect(typeof user.getId()).toBe('string');
+      expect(user.getId()).toMatch(UUID_REGEX);
     });
 
     it('should return the user name with getName()', () => {
