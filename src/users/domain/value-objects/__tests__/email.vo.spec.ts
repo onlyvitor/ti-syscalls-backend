@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@jest/globals';
-import { Email } from '../../email.vo';
+import { Email } from '../../../value-objects/email.vo';
 
 describe('Email Object Value', () => {
   it('should create a valid email value object', () => {

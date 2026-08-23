@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { Email } from './email.vo';
+import { Email } from '../value-objects/email.vo';
 
 export enum UserRole {
   USER = 'user',
