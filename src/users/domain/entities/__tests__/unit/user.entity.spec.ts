@@ -27,6 +27,16 @@ describe('User Entity Unit Tests', () => {
       expect(user.hasPassword('wrong-password')).toBe(false);
     });
 
+    it('should use USER as the default role', () => {
+      const createdUser = User.create({
+        name: 'Default Role User',
+        email: 'default.role@example.com',
+        password: 'securePassword123',
+      });
+
+      expect(createdUser.getRole()).toBe(UserRole.USER);
+    });
+
     it('should generate a unique UUID for each user instance', () => {
       const anotherUser = User.create({
         name: 'Jane Doe',

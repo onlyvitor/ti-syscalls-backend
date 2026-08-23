@@ -9,21 +9,23 @@ export enum UserRole {
 
 export class User {
   private readonly id: string;
+  private role: UserRole;
 
   private constructor(
     private name: string,
     private email: Email,
     private password: string,
-    private role: UserRole,
+    role?: UserRole,
   ) {
     this.id = randomUUID();
+    this.role = role || UserRole.USER;
   }
 
   static create(data: {
     name: string;
     email: string;
     password: string;
-    role: UserRole;
+    role?: UserRole;
   }): User {
     return new User(
       data.name.trim(),
