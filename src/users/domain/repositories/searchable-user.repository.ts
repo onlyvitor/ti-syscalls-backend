@@ -1,9 +1,8 @@
 import { UserRepository } from './user.repository';
 
 export interface SearchableUserRepository<
-  User,
   SearchParams,
   SearchResult,
-> extends UserRepository<User> {
+> extends UserRepository {
   search(props: SearchParams): Promise<SearchResult>;
 }

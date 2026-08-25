@@ -4,7 +4,7 @@ import { InMemoryUserRepository } from './in-memory-user.repository';
 
 export class InMemorySearchableUserRepository
   extends InMemoryUserRepository
-  implements SearchableUserRepository<User, any, User[]>
+  implements SearchableUserRepository<any, User[]>
 {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   search(_props: any): Promise<User[]> {

@@ -2,7 +2,7 @@ import { User } from '../../domain/entities/user.entity';
 import { UserRepository } from '../../domain/repositories/user.repository';
 import { Email } from '../../domain/value-objects/email.vo';
 
-export class InMemoryUserRepository implements UserRepository<User> {
+export class InMemoryUserRepository implements UserRepository {
   private users: User[] = [];
 
   async insert(user: User): Promise<void> {
