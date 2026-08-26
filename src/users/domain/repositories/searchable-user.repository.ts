@@ -9,6 +9,22 @@ export type SearchProps<Filter = string> = {
   filter?: Filter;
 };
 
+export class SearchParams {
+  protected page: number;
+  protected perPage: number;
+  protected sort: string | null;
+  protected sortDirection: SortDirection;
+  protected filter: string | null;
+
+  constructor(props: SearchProps) {
+    this.page = props.page ?? 1;
+    this.perPage = props.perPage ?? 15;
+    this.sort = props.sort ?? null;
+    this.sortDirection = props.sortDirection ?? 'asc';
+    this.filter = props.filter ?? null;
+  }
+}
+
 export interface SearchableUserRepository<
   SearchParams,
   SearchResult,
