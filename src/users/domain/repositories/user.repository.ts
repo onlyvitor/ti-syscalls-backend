@@ -1,6 +1,7 @@
+import { User } from '../entities/user.entity';
 import { Email } from '../value-objects/email.vo';
 
-export interface UserRepository<User> {
+export interface UserRepository {
   insert(user: User): Promise<void>;
   findById(id: string): Promise<User | null>;
   findAll(): Promise<User[]>;
