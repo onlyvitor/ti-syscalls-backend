@@ -23,6 +23,46 @@ export class SearchParams {
     this.sortDirection = props.sortDirection ?? 'asc';
     this.filter = props.filter ?? null;
   }
+
+  getPage(): number {
+    return this.page;
+  }
+
+  getPerPage(): number {
+    return this.perPage;
+  }
+
+  getSort(): string | null {
+    return this.sort;
+  }
+
+  getSortDirection(): SortDirection {
+    return this.sortDirection;
+  }
+
+  getFilter(): string | null {
+    return this.filter;
+  }
+
+  setPage(page: number): void {
+    this.page = page;
+  }
+
+  setPerPage(perPage: number): void {
+    this.perPage = perPage;
+  }
+
+  setSort(sort: string | null): void {
+    this.sort = sort;
+  }
+
+  setSortDirection(sortDirection: SortDirection): void {
+    this.sortDirection = sortDirection;
+  }
+
+  setFilter(filter: string | null): void {
+    this.filter = filter;
+  }
 }
 
 export interface SearchableUserRepository<
