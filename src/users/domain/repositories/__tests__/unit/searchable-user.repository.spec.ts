@@ -1,9 +1,12 @@
-import { describe, it, expect } from '@jest/globals';
+import { beforeEach, describe, it, expect } from '@jest/globals';
 import {
   SearchParams,
+  SearchResult,
   SearchProps,
+  SearchResultProps,
   SortDirection,
 } from '../../searchable-user.repository';
+import { User, UserRole } from '../../../entities/user.entity';
 
 describe('SearchParams', () => {
   describe('constructor', () => {
@@ -274,6 +277,153 @@ describe('SearchParams', () => {
       params.setFilter(' joh ');
 
       expect(params.getFilter()).toBe(' joh ');
+    });
+  });
+});
+
+describe('SearchResult', () => {
+  let user: User;
+  let baseProps: SearchResultProps<User>;
+
+  beforeEach(() => {
+    user = User.create({
+      name: 'John Doe',
+      email: 'john.doe@example.com',
+      password: 'securePassword123',
+      role: UserRole.USER,
+    });
+    baseProps = {
+      items: [user],
+      total: 1,
+      currentPage: 1,
+      perPage: 15,
+      lastPage: 1,
+      sort: null,
+      sortDirection: 'asc',
+      filter: null,
+    };
+  });
+
+  describe('constructor', () => {
+    it('should assign all provided props', () => {
+      const result = new SearchResult(baseProps);
+
+      expect(result.items).toEqual([user]);
+      expect(result.total).toBe(1);
+      expect(result.currentPage).toBe(1);
+      expect(result.perPage).toBe(15);
+      expect(result.sort).toBeNull();
+      expect(result.sortDirection).toBe('asc');
+      expect(result.filter).toBeNull();
+    });
+
+    it('should keep the exact items array reference', () => {
+      const items = [user];
+      const result = new SearchResult({ ...baseProps, items });
+
+      expect(result.items).toBe(items);
+    });
+
+    it('should assign an empty items array', () => {
+      const result = new SearchResult({ ...baseProps, items: [], total: 0 });
+
+      expect(result.items).toEqual([]);
+      expect(result.total).toBe(0);
+    });
+
+    it('should assign a non-null filter', () => {
+      const result = new SearchResult({ ...baseProps, filter: 'joh' });
+
+      expect(result.filter).toBe('joh');
+    });
+
+    it('should assign a non-null sort column', () => {
+      const result = new SearchResult({ ...baseProps, sort: 'name' });
+
+      expect(result.sort).toBe('name');
+    });
+
+    it('should keep a desc sort direction', () => {
+      const result = new SearchResult({
+        ...baseProps,
+        sortDirection: 'desc',
+      });
+
+      expect(result.sortDirection).toBe('desc');
+    });
+  });
+
+  describe('lastPage (computed)', () => {
+    it('should compute lastPage with an exact division', () => {
+      const result = new SearchResult({ ...baseProps, total: 30, perPage: 15 });
+
+      expect(result.lastPage).toBe(2);
+    });
+
+    it('should round up when total is not a multiple of perPage', () => {
+      const result = new SearchResult({ ...baseProps, total: 31, perPage: 15 });
+
+      expect(result.lastPage).toBe(3);
+    });
+
+    it('should compute lastPage as 0 when total is 0', () => {
+      const result = new SearchResult({ ...baseProps, total: 0 });
+
+      expect(result.lastPage).toBe(0);
+    });
+
+    it('should compute lastPage as 1 when total is less than perPage', () => {
+      const result = new SearchResult({ ...baseProps, total: 5, perPage: 15 });
+
+      expect(result.lastPage).toBe(1);
+    });
+
+    it('should ignore the lastPage value passed in props and recompute it', () => {
+      const result = new SearchResult({
+        ...baseProps,
+        total: 31,
+        perPage: 15,
+        lastPage: 99,
+      });
+
+      expect(result.lastPage).toBe(3);
+    });
+  });
+
+  describe('sort (defaulting)', () => {
+    it('should default sort to null when null is passed', () => {
+      const result = new SearchResult({ ...baseProps, sort: null });
+
+      expect(result.sort).toBeNull();
+    });
+
+    it('should default sort to null when undefined is passed', () => {
+      const result = new SearchResult({
+        ...baseProps,
+        sort: undefined as unknown as string,
+      });
+
+      expect(result.sort).toBeNull();
+    });
+  });
+
+  describe('sortDirection (defaulting)', () => {
+    it('should default sortDirection to asc when null is passed', () => {
+      const result = new SearchResult({
+        ...baseProps,
+        sortDirection: null as unknown as SortDirection,
+      });
+
+      expect(result.sortDirection).toBe('asc');
+    });
+
+    it('should default sortDirection to asc when undefined is passed', () => {
+      const result = new SearchResult({
+        ...baseProps,
+        sortDirection: undefined as unknown as SortDirection,
+      });
+
+      expect(result.sortDirection).toBe('asc');
     });
   });
 });
