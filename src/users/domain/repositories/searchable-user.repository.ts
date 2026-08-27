@@ -9,6 +9,17 @@ export type SearchProps<Filter = string | null> = {
   filter?: Filter;
 };
 
+export type SearchResultProps<User> = {
+  items: User[];
+  total: number;
+  currentPage: number;
+  perPage: number;
+  lastPage: number;
+  sort: string | null;
+  sortDirection: SortDirection;
+  filter: string | null;
+};
+
 export class SearchParams {
   protected page: number;
   protected perPage: number;
@@ -66,6 +77,28 @@ export class SearchParams {
       filter === null || filter === undefined || filter.trim() === ''
         ? null
         : filter;
+  }
+}
+
+export class SearchResult<User, Filter = string | null> {
+  readonly items: User[];
+  readonly total: number;
+  readonly currentPage: number;
+  readonly perPage: number;
+  readonly lastPage: number;
+  readonly sort: string | null;
+  readonly sortDirection: SortDirection;
+  readonly filter: Filter;
+
+  constructor(props: SearchResultProps<User>) {
+    this.items = props.items;
+    this.total = props.total;
+    this.currentPage = props.currentPage;
+    this.perPage = props.perPage;
+    this.lastPage = Math.ceil(props.total / props.perPage);
+    this.sort = props.sort ?? null;
+    this.sortDirection = props.sortDirection ?? 'asc';
+    this.filter = props.filter as Filter;
   }
 }
 
