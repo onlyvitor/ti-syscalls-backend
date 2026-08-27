@@ -1,7 +1,7 @@
 import { UserRepository } from './user.repository';
 
 export type SortDirection = 'asc' | 'desc';
-export type SearchProps<Filter = string> = {
+export type SearchProps<Filter = string | null> = {
   page?: number;
   perPage?: number;
   sort?: string | null;
@@ -53,7 +53,8 @@ export class SearchParams {
   }
 
   setSort(sort: string | null): void {
-    this.sort = sort;
+    this.sort =
+      sort === null || sort === undefined || sort.trim() === '' ? null : sort;
   }
 
   setSortDirection(sortDirection: SortDirection): void {
@@ -61,7 +62,10 @@ export class SearchParams {
   }
 
   setFilter(filter: string | null): void {
-    this.filter = filter;
+    this.filter =
+      filter === null || filter === undefined || filter.trim() === ''
+        ? null
+        : filter;
   }
 }
 

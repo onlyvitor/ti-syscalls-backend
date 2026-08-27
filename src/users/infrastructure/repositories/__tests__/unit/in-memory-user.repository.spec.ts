@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from '@jest/globals';
-import { InMemoryUserRepository } from '../in-memory-user.repository';
-import { User, UserRole } from '../../../domain/entities/user.entity';
-import { Email } from '../../../domain/value-objects/email.vo';
+import { InMemoryUserRepository } from '../../in-memory-user.repository';
+import { User, UserRole } from '../../../../domain/entities/user.entity';
+import { Email } from '../../../../domain/value-objects/email.vo';
 
 describe('InMemoryUserRepository Unit Tests', () => {
   let repository: InMemoryUserRepository;
