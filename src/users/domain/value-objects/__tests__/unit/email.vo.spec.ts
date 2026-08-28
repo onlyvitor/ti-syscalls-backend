@@ -12,4 +12,23 @@ describe('Email Object Value', () => {
       'Invalid email format: invalid-email',
     );
   });
+
+  it('should normalize email by trimming and lowercasing', () => {
+    const email = Email.create('   Jane.Doe@Example.COM   ');
+
+    expect(email.valueOf()).toBe('jane.doe@example.com');
+  });
+
+  it('should throw an error when creating an empty email', () => {
+    expect(() => Email.create('   ')).toThrow('Email cannot be empty');
+  });
+
+  it('should compare two Email instances by value', () => {
+    const emailA = Email.create('match@example.com');
+    const emailB = Email.create('MATCH@example.com');
+    const emailC = Email.create('other@example.com');
+
+    expect(emailA.equals(emailB)).toBe(true);
+    expect(emailA.equals(emailC)).toBe(false);
+  });
 });
