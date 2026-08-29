@@ -103,8 +103,11 @@ export class SearchResult<User, Filter = string | null> {
 }
 
 export interface SearchableUserRepository<
-  SearchParams,
-  SearchResult,
+  User,
+  Filter = string | null,
+  SearchInput = SearchProps<Filter>,
+  SearchOutput = SearchResult<User, Filter>,
 > extends UserRepository {
-  search(props: SearchParams): Promise<SearchResult>;
+  sortableFields: string[];
+  search(props: SearchInput): Promise<SearchOutput>;
 }
