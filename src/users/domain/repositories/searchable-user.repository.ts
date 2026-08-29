@@ -9,15 +9,14 @@ export type SearchProps<Filter = string | null> = {
   filter?: Filter;
 };
 
-export type SearchResultProps<User> = {
+export type SearchResultProps<User, Filter = string | null> = {
   items: User[];
   total: number;
   currentPage: number;
   perPage: number;
-  lastPage: number;
   sort: string | null;
   sortDirection: SortDirection;
-  filter: string | null;
+  filter: Filter;
 };
 
 export class SearchParams {
@@ -28,8 +27,8 @@ export class SearchParams {
   protected filter: string | null;
 
   constructor(props: SearchProps) {
-    this.page = props.page ?? 1;
-    this.perPage = props.perPage ?? 15;
+    this.page = SearchParams.normalizePositiveInteger(props.page, 1);
+    this.perPage = SearchParams.normalizePositiveInteger(props.perPage, 15);
     this.sort = props.sort ?? null;
     this.sortDirection = props.sortDirection ?? 'asc';
     this.filter = props.filter ?? null;
@@ -56,11 +55,11 @@ export class SearchParams {
   }
 
   setPage(page: number): void {
-    this.page = page;
+    this.page = SearchParams.normalizePositiveInteger(page, 1);
   }
 
   setPerPage(perPage: number): void {
-    this.perPage = perPage;
+    this.perPage = SearchParams.normalizePositiveInteger(perPage, 15);
   }
 
   setSort(sort: string | null): void {
@@ -78,6 +77,21 @@ export class SearchParams {
         ? null
         : filter;
   }
+
+  private static normalizePositiveInteger(
+    value: number | null | undefined,
+    fallback: number,
+  ): number {
+    if (
+      value === null ||
+      value === undefined ||
+      !Number.isInteger(value) ||
+      value < 1
+    ) {
+      return fallback;
+    }
+    return value;
+  }
 }
 
 export class SearchResult<User, Filter = string | null> {
@@ -90,15 +104,22 @@ export class SearchResult<User, Filter = string | null> {
   readonly sortDirection: SortDirection;
   readonly filter: Filter;
 
-  constructor(props: SearchResultProps<User>) {
+  constructor(props: SearchResultProps<User, Filter>) {
+    if (!Number.isInteger(props.perPage) || props.perPage < 1) {
+      throw new RangeError('perPage must be a positive integer');
+    }
+    if (!Number.isInteger(props.total) || props.total < 0) {
+      throw new RangeError('total must be a non-negative integer');
+    }
+
     this.items = props.items;
     this.total = props.total;
-    this.currentPage = props.currentPage;
+    this.currentPage = Math.max(1, props.currentPage);
     this.perPage = props.perPage;
     this.lastPage = Math.ceil(props.total / props.perPage);
     this.sort = props.sort ?? null;
     this.sortDirection = props.sortDirection ?? 'asc';
-    this.filter = props.filter as Filter;
+    this.filter = props.filter;
   }
 }
 

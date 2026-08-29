@@ -297,7 +297,6 @@ describe('SearchResult', () => {
       total: 1,
       currentPage: 1,
       perPage: 15,
-      lastPage: 1,
       sort: null,
       sortDirection: 'asc',
       filter: null,
@@ -376,17 +375,6 @@ describe('SearchResult', () => {
       const result = new SearchResult({ ...baseProps, total: 5, perPage: 15 });
 
       expect(result.lastPage).toBe(1);
-    });
-
-    it('should ignore the lastPage value passed in props and recompute it', () => {
-      const result = new SearchResult({
-        ...baseProps,
-        total: 31,
-        perPage: 15,
-        lastPage: 99,
-      });
-
-      expect(result.lastPage).toBe(3);
     });
   });
 
