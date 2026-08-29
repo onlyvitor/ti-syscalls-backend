@@ -5,6 +5,10 @@ import { Email } from '../../domain/value-objects/email.vo';
 export class InMemoryUserRepository implements UserRepository {
   private users: User[] = [];
 
+  protected getUsers(): User[] {
+    return this.users;
+  }
+
   async insert(user: User): Promise<void> {
     this.users.push(user);
     return Promise.resolve();

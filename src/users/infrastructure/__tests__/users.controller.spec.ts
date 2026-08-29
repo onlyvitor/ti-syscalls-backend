@@ -36,7 +36,7 @@ describe('UsersController', () => {
     const dto = { name: 'Alice', email: 'alice@example.com', password: 'pass' };
     mockService.create.mockReturnValue({ id: '1', ...dto, role: 'user' });
 
-    const result = controller.create(dto as any);
+    const result = controller.create(dto);
 
     expect(mockService.create).toHaveBeenCalledWith(dto);
     expect(result).toEqual({ id: '1', ...dto, role: 'user' });
@@ -64,7 +64,7 @@ describe('UsersController', () => {
     const dto = { name: 'Updated' };
     mockService.update.mockReturnValue('updated');
 
-    const result = controller.update('7', dto as any);
+    const result = controller.update('7', dto);
 
     expect(mockService.update).toHaveBeenCalledWith(7, dto);
     expect(result).toBe('updated');
