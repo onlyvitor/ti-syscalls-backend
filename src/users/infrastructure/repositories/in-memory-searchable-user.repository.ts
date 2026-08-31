@@ -3,7 +3,7 @@ import {
   SearchParams,
   SearchResult,
   SortDirection,
-} from 'src/users/domain/repositories/searchable-user.repository';
+} from '../../domain/repositories/searchable-user.repository';
 import { User } from '../../domain/entities/user.entity';
 import { InMemoryUserRepository } from './in-memory-user.repository';
 
