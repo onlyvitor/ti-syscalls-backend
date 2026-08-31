@@ -20,7 +20,6 @@ export class InMemorySearchableUserRepository
   sortableFields: string[] = ['name', 'email', 'role'];
 
   search(props: SearchParams): Promise<SearchResult<User, string | null>> {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
     const allUsers: User[] = this.getUsers();
     const itemsFiltered = this.applyFilter(allUsers, props.getFilter());
     const itemsSorted = this.applySort(
@@ -48,11 +47,12 @@ export class InMemorySearchableUserRepository
   }
 
   private applyFilter(items: User[], filter: string | null): User[] {
+    //if filter is empty return the items as is
     const term = filter?.trim().toLowerCase() ?? '';
     if (term === '') {
       return items;
     }
-
+    //filter the items based on the term in the name or email
     return items.filter(
       (user) =>
         user.getName().toLowerCase().includes(term) ||
@@ -65,11 +65,13 @@ export class InMemorySearchableUserRepository
     sort: string | null,
     sortDirection: SortDirection,
   ): User[] {
+    //if sort is empty return the items as is
     const field = sort?.trim() ?? '';
     if (field === '' || !this.sortableFields.includes(field)) {
       return items;
     }
-
+    //sort the items in ascending or descending order based on the sortDirection
+    //the [...] operator is used to create a new array so that the original array is not mutated
     return [...items].sort((a, b) => {
       const result = this.getSortValue(a, field).localeCompare(
         this.getSortValue(b, field),
@@ -84,6 +86,7 @@ export class InMemorySearchableUserRepository
   }
 
   private getSortValue(user: User, field: string): string {
+    // return the value of the field to be sorted
     switch (field) {
       case 'name':
         return user.getName();

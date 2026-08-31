@@ -3,6 +3,12 @@ import { InMemoryUserRepository } from '../../in-memory-user.repository';
 import { User, UserRole } from '../../../../domain/entities/user.entity';
 import { Email } from '../../../../domain/value-objects/email.vo';
 
+class StubInMemoryUserRepository extends InMemoryUserRepository {
+  public getInternalUsers(): User[] {
+    return this.getUsers();
+  }
+}
+
 describe('InMemoryUserRepository Unit Tests', () => {
   let repository: InMemoryUserRepository;
   let user: User;
@@ -146,6 +152,16 @@ describe('InMemoryUserRepository Unit Tests', () => {
 
       const all = await repository.findAll();
       expect(all).toHaveLength(1);
+    });
+  });
+
+  describe('getUsers', () => {
+    it('should return the internal users array', async () => {
+      const stubRepo = new StubInMemoryUserRepository();
+      expect(stubRepo.getInternalUsers()).toEqual([]);
+
+      await stubRepo.insert(user);
+      expect(stubRepo.getInternalUsers()).toEqual([user]);
     });
   });
 });
