@@ -76,7 +76,7 @@ export class SearchParams<TFilter, TSortField extends string = string> {
   }
 
   setSort(sort: TSortField | null): void {
-    this.sort = sort;
+    this.sort = sort ?? null;
   }
 
   setSortDirection(sortDirection: SortDirection): void {
@@ -84,7 +84,7 @@ export class SearchParams<TFilter, TSortField extends string = string> {
   }
 
   setFilter(filter: TFilter | null): void {
-    this.filter = filter;
+    this.filter = filter ?? null;
   }
 
   private static normalizePositiveInteger(

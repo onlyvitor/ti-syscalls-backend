@@ -66,6 +66,19 @@ describe('SearchParams', () => {
     expect(params.getSortDirection()).toBe('desc');
     expect(params.getFilter()).toBe(filter);
   });
+
+  it('should normalize nullish ordering and filter values', () => {
+    const params = new SearchParams<ExampleFilter, ExampleSort>({
+      sort: 'name',
+      filter: { name: 'John' },
+    });
+
+    params.setSort(undefined as unknown as null);
+    params.setFilter(undefined as unknown as null);
+
+    expect(params.getSort()).toBeNull();
+    expect(params.getFilter()).toBeNull();
+  });
 });
 
 describe('SearchResult', () => {
