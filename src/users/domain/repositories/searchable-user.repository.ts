@@ -31,7 +31,9 @@ export class SearchParams extends SharedSearchParams<
   UserSortField
 > {
   setSort(sort: UserSortField | null): void {
-    super.setSort(sort === null || sort.trim() === '' ? null : sort);
+    super.setSort(
+      sort === null || sort === undefined || sort.trim() === '' ? null : sort,
+    );
   }
 }
 

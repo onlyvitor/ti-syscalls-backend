@@ -185,7 +185,7 @@ describe('SearchParams', () => {
     it('should set null when sort is undefined', () => {
       const params = new SearchParams({ sort: 'name' });
 
-      params.setSort(null);
+      params.setSort(undefined as unknown as UserSortField);
 
       expect(params.getSort()).toBeNull();
     });
