@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from '@jest/globals';
 import { InMemoryUserRepository } from '../../in-memory-user.repository';
 import { User, UserRole } from '../../../../domain/entities/user.entity';
 import { Email } from '../../../../domain/value-objects/email.vo';
+import { Repository } from '../../../../../shared/domain/repositories/repository';
 
 class StubInMemoryUserRepository extends InMemoryUserRepository {
   public getInternalUsers(): User[] {
@@ -21,6 +22,17 @@ describe('InMemoryUserRepository Unit Tests', () => {
       password: 'securePassword123',
       role: UserRole.USER,
     });
+  });
+
+  it('should persist and find a user through the shared repository contract', async () => {
+    const baseRepository: Repository<User, string> = repository;
+
+    await baseRepository.insert(user);
+
+    await expect(baseRepository.findById(user.getId())).resolves.toBe(user);
+    await expect(
+      baseRepository.findById('non-existent-id'),
+    ).resolves.toBeNull();
   });
 
   describe('insert', () => {

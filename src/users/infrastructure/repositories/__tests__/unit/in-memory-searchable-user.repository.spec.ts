@@ -138,6 +138,44 @@ describe('InMemorySearchableUserRepository Unit Tests', () => {
       expect(result.total).toBe(0);
       expect(result.lastPage).toBe(0);
     });
+
+    it('should filter users by a specific name', async () => {
+      const result = await repository.search(
+        new SearchParams({ filter: { name: 'LI' } }),
+      );
+
+      expect(result.items).toEqual([charlie, alice]);
+      expect(result.total).toBe(2);
+    });
+
+    it('should filter users by a specific email', async () => {
+      const result = await repository.search(
+        new SearchParams({ filter: { email: 'A@EXAMPLE' } }),
+      );
+
+      expect(result.items).toEqual([bob]);
+      expect(result.total).toBe(1);
+    });
+
+    it('should filter users by role', async () => {
+      const result = await repository.search(
+        new SearchParams({ filter: { role: UserRole.TECHNICIAN } }),
+      );
+
+      expect(result.items).toEqual([charlie]);
+      expect(result.total).toBe(1);
+    });
+
+    it('should combine aggregate-specific filters', async () => {
+      const result = await repository.search(
+        new SearchParams({
+          filter: { name: 'bo', email: 'example.com', role: UserRole.ADMIN },
+        }),
+      );
+
+      expect(result.items).toEqual([bob]);
+      expect(result.total).toBe(1);
+    });
   });
 
   describe('sort', () => {
@@ -259,6 +297,23 @@ describe('InMemorySearchableUserRepository Unit Tests', () => {
       expect(result.filter).toEqual({ query: 'b' });
       expect(result.sort).toBe('name');
       expect(result.sortDirection).toBe('desc');
+    });
+
+    it('should combine specific filters, ordering and pagination', async () => {
+      const result = await repository.search(
+        new SearchParams({
+          filter: { email: 'example.com' },
+          sort: 'name',
+          sortDirection: 'desc',
+          page: 2,
+          perPage: 1,
+        }),
+      );
+
+      expect(result.items).toEqual([bob]);
+      expect(result.total).toBe(3);
+      expect(result.lastPage).toBe(3);
+      expect(result.currentPage).toBe(2);
     });
   });
 });
