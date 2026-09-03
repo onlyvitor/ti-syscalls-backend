@@ -3,23 +3,19 @@ import {
   SearchParams,
   SearchResult,
   SortDirection,
+  UserFilter,
+  UserSortField,
 } from '../../domain/repositories/searchable-user.repository';
 import { User } from '../../domain/entities/user.entity';
 import { InMemoryUserRepository } from './in-memory-user.repository';
 
 export class InMemorySearchableUserRepository
   extends InMemoryUserRepository
-  implements
-    SearchableUserRepository<
-      User,
-      string | null,
-      SearchParams,
-      SearchResult<User, string | null>
-    >
+  implements SearchableUserRepository
 {
-  sortableFields: string[] = ['name', 'email', 'role'];
+  readonly sortableFields: readonly UserSortField[] = ['name', 'email', 'role'];
 
-  search(props: SearchParams): Promise<SearchResult<User, string | null>> {
+  search(props: SearchParams): Promise<SearchResult> {
     const allUsers: User[] = this.getUsers();
     const itemsFiltered = this.applyFilter(allUsers, props.getFilter());
     const itemsSorted = this.applySort(
@@ -34,7 +30,7 @@ export class InMemorySearchableUserRepository
     );
 
     return Promise.resolve(
-      new SearchResult<User, string | null>({
+      new SearchResult({
         items: itemsPaginated,
         total: itemsFiltered.length,
         currentPage: props.getPage(),
@@ -46,32 +42,40 @@ export class InMemorySearchableUserRepository
     );
   }
 
-  private applyFilter(items: User[], filter: string | null): User[] {
-    //if filter is empty return the items as is
-    const term = filter?.trim().toLowerCase() ?? '';
-    if (term === '') {
+  private applyFilter(items: User[], filter: UserFilter | null): User[] {
+    if (filter === null) {
       return items;
     }
-    //filter the items based on the term in the name or email
-    return items.filter(
-      (user) =>
-        user.getName().toLowerCase().includes(term) ||
-        user.getEmail().toLowerCase().includes(term),
-    );
+
+    const query = this.normalizeFilterValue(filter.query);
+    const name = this.normalizeFilterValue(filter.name);
+    const email = this.normalizeFilterValue(filter.email);
+
+    return items.filter((user) => {
+      const userName = user.getName().toLowerCase();
+      const userEmail = user.getEmail().toLowerCase();
+
+      const matchesQuery =
+        query === '' || userName.includes(query) || userEmail.includes(query);
+      const matchesName = name === '' || userName.includes(name);
+      const matchesEmail = email === '' || userEmail.includes(email);
+      const matchesRole =
+        filter.role === undefined || user.getRole() === filter.role;
+
+      return matchesQuery && matchesName && matchesEmail && matchesRole;
+    });
   }
 
   private applySort(
     items: User[],
-    sort: string | null,
+    sort: UserSortField | null,
     sortDirection: SortDirection,
   ): User[] {
-    //if sort is empty return the items as is
-    const field = sort?.trim() ?? '';
-    if (field === '' || !this.sortableFields.includes(field)) {
+    const field = sort?.trim() as UserSortField | undefined;
+    if (field === undefined || !this.sortableFields.includes(field)) {
       return items;
     }
-    //sort the items in ascending or descending order based on the sortDirection
-    //the [...] operator is used to create a new array so that the original array is not mutated
+
     return [...items].sort((a, b) => {
       const result = this.getSortValue(a, field).localeCompare(
         this.getSortValue(b, field),
@@ -85,8 +89,7 @@ export class InMemorySearchableUserRepository
     return items.slice(start, start + perPage);
   }
 
-  private getSortValue(user: User, field: string): string {
-    // return the value of the field to be sorted
+  private getSortValue(user: User, field: UserSortField): string {
     switch (field) {
       case 'name':
         return user.getName();
@@ -94,8 +97,10 @@ export class InMemorySearchableUserRepository
         return user.getEmail();
       case 'role':
         return user.getRole();
-      default:
-        return '';
     }
+  }
+
+  private normalizeFilterValue(value: string | undefined): string {
+    return value?.trim().toLowerCase() ?? '';
   }
 }

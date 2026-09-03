@@ -5,6 +5,7 @@ import {
   SearchProps,
   SearchResultProps,
   SortDirection,
+  UserSortField,
 } from '../../searchable-user.repository';
 import { User, UserRole } from '../../../entities/user.entity';
 
@@ -26,14 +27,14 @@ describe('SearchParams', () => {
         perPage: 10,
         sort: 'name',
         sortDirection: 'desc',
-        filter: 'joh',
+        filter: { query: 'joh' },
       });
 
       expect(params.getPage()).toBe(3);
       expect(params.getPerPage()).toBe(10);
       expect(params.getSort()).toBe('name');
       expect(params.getSortDirection()).toBe('desc');
-      expect(params.getFilter()).toBe('joh');
+      expect(params.getFilter()).toEqual({ query: 'joh' });
     });
 
     it('should apply default page when page is not provided', () => {
@@ -51,11 +52,11 @@ describe('SearchParams', () => {
     });
 
     it('should apply default sort and sortDirection when not provided', () => {
-      const params = new SearchParams({ filter: 'joh' });
+      const params = new SearchParams({ filter: { query: 'joh' } });
 
       expect(params.getSort()).toBeNull();
       expect(params.getSortDirection()).toBe('asc');
-      expect(params.getFilter()).toBe('joh');
+      expect(params.getFilter()).toEqual({ query: 'joh' });
     });
 
     it('should apply default filter when filter is not provided', () => {
@@ -108,7 +109,9 @@ describe('SearchParams', () => {
     });
 
     it('should return the sort column when set', () => {
-      const params = new SearchParams({ sort: 'created_at' });
+      const params = new SearchParams({
+        sort: 'created_at' as UserSortField,
+      });
 
       expect(params.getSort()).toBe('created_at');
     });
@@ -136,9 +139,9 @@ describe('SearchParams', () => {
     });
 
     it('should return the filter when set', () => {
-      const params = new SearchParams({ filter: 'joh' });
+      const params = new SearchParams({ filter: { query: 'joh' } });
 
-      expect(params.getFilter()).toBe('joh');
+      expect(params.getFilter()).toEqual({ query: 'joh' });
     });
   });
 
@@ -190,7 +193,7 @@ describe('SearchParams', () => {
     it('should set null when sort is an empty string', () => {
       const params = new SearchParams({ sort: 'name' });
 
-      params.setSort('');
+      params.setSort('' as UserSortField);
 
       expect(params.getSort()).toBeNull();
     });
@@ -198,7 +201,7 @@ describe('SearchParams', () => {
     it('should set null when sort contains only whitespace', () => {
       const params = new SearchParams({ sort: 'name' });
 
-      params.setSort('   ');
+      params.setSort('   ' as UserSortField);
 
       expect(params.getSort()).toBeNull();
     });
@@ -206,7 +209,7 @@ describe('SearchParams', () => {
     it('should keep a sort column that has non-whitespace content', () => {
       const params = new SearchParams({});
 
-      params.setSort(' name ');
+      params.setSort(' name ' as UserSortField);
 
       expect(params.getSort()).toBe(' name ');
     });
@@ -234,13 +237,13 @@ describe('SearchParams', () => {
     it('should set a valid filter', () => {
       const params = new SearchParams({});
 
-      params.setFilter('joh');
+      params.setFilter({ name: 'joh' });
 
-      expect(params.getFilter()).toBe('joh');
+      expect(params.getFilter()).toEqual({ name: 'joh' });
     });
 
     it('should set null when filter is null', () => {
-      const params = new SearchParams({ filter: 'joh' });
+      const params = new SearchParams({ filter: { query: 'joh' } });
 
       params.setFilter(null);
 
@@ -248,42 +251,45 @@ describe('SearchParams', () => {
     });
 
     it('should set null when filter is undefined', () => {
-      const params = new SearchParams({ filter: 'joh' });
+      const params = new SearchParams({ filter: { query: 'joh' } });
 
-      params.setFilter(null);
-
-      expect(params.getFilter()).toBeNull();
-    });
-
-    it('should set null when filter is an empty string', () => {
-      const params = new SearchParams({ filter: 'joh' });
-
-      params.setFilter('');
+      params.setFilter(undefined as unknown as null);
 
       expect(params.getFilter()).toBeNull();
     });
 
-    it('should set null when filter contains only whitespace', () => {
-      const params = new SearchParams({ filter: 'joh' });
+    it('should keep aggregate filter values empty for the adapter to interpret', () => {
+      const params = new SearchParams({ filter: { query: 'joh' } });
 
-      params.setFilter(' \t ');
+      params.setFilter({ query: '' });
 
-      expect(params.getFilter()).toBeNull();
+      expect(params.getFilter()).toEqual({ query: '' });
     });
 
-    it('should keep a filter that has non-whitespace content', () => {
+    it('should keep filter normalization out of shared search params', () => {
+      const params = new SearchParams({ filter: { query: 'joh' } });
+
+      params.setFilter({ name: ' \t ' });
+
+      expect(params.getFilter()).toEqual({ name: ' \t ' });
+    });
+
+    it('should keep an aggregate-specific filter', () => {
       const params = new SearchParams({});
 
-      params.setFilter(' joh ');
+      params.setFilter({ email: ' joh ', role: UserRole.ADMIN });
 
-      expect(params.getFilter()).toBe(' joh ');
+      expect(params.getFilter()).toEqual({
+        email: ' joh ',
+        role: UserRole.ADMIN,
+      });
     });
   });
 });
 
 describe('SearchResult', () => {
   let user: User;
-  let baseProps: SearchResultProps<User>;
+  let baseProps: SearchResultProps;
 
   beforeEach(() => {
     user = User.create({
@@ -331,9 +337,12 @@ describe('SearchResult', () => {
     });
 
     it('should assign a non-null filter', () => {
-      const result = new SearchResult({ ...baseProps, filter: 'joh' });
+      const result = new SearchResult({
+        ...baseProps,
+        filter: { name: 'joh' },
+      });
 
-      expect(result.filter).toBe('joh');
+      expect(result.filter).toEqual({ name: 'joh' });
     });
 
     it('should assign a non-null sort column', () => {

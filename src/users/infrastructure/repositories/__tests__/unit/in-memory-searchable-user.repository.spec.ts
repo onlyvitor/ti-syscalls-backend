@@ -3,6 +3,7 @@ import { InMemorySearchableUserRepository } from '../../in-memory-searchable-use
 import {
   SearchParams,
   SearchResult,
+  UserSortField,
 } from '../../../../domain/repositories/searchable-user.repository';
 import { User, UserRole } from '../../../../domain/entities/user.entity';
 
@@ -71,7 +72,7 @@ describe('InMemorySearchableUserRepository Unit Tests', () => {
           perPage: 2,
           sort: 'name',
           sortDirection: 'desc',
-          filter: 'example',
+          filter: { query: 'example' },
         }),
       );
 
@@ -79,7 +80,7 @@ describe('InMemorySearchableUserRepository Unit Tests', () => {
       expect(result.perPage).toBe(2);
       expect(result.sort).toBe('name');
       expect(result.sortDirection).toBe('desc');
-      expect(result.filter).toBe('example');
+      expect(result.filter).toEqual({ query: 'example' });
     });
 
     it('should not mutate the internal users array when sorting', async () => {
@@ -93,7 +94,7 @@ describe('InMemorySearchableUserRepository Unit Tests', () => {
   describe('filter', () => {
     it('should filter users by name case-insensitively', async () => {
       const result = await repository.search(
-        new SearchParams({ filter: 'AL' }),
+        new SearchParams({ filter: { query: 'AL' } }),
       );
 
       expect(result.items).toEqual([alice]);
@@ -102,7 +103,7 @@ describe('InMemorySearchableUserRepository Unit Tests', () => {
 
     it('should filter users by email case-insensitively', async () => {
       const result = await repository.search(
-        new SearchParams({ filter: 'B@EXAMPLE.COM' }),
+        new SearchParams({ filter: { query: 'B@EXAMPLE.COM' } }),
       );
 
       expect(result.items).toEqual([charlie]);
@@ -110,7 +111,9 @@ describe('InMemorySearchableUserRepository Unit Tests', () => {
     });
 
     it('should match the filter in either name or email', async () => {
-      const result = await repository.search(new SearchParams({ filter: 'b' }));
+      const result = await repository.search(
+        new SearchParams({ filter: { query: 'b' } }),
+      );
 
       // 'b' matches bob by name and charlie by email (b@example.com)
       expect(result.items).toEqual([charlie, bob]);
@@ -120,7 +123,7 @@ describe('InMemorySearchableUserRepository Unit Tests', () => {
 
     it('should trim whitespace from the filter term', async () => {
       const result = await repository.search(
-        new SearchParams({ filter: '   bob   ' }),
+        new SearchParams({ filter: { query: '   bob   ' } }),
       );
 
       expect(result.items).toEqual([bob]);
@@ -128,7 +131,7 @@ describe('InMemorySearchableUserRepository Unit Tests', () => {
 
     it('should return empty items when no user matches the filter', async () => {
       const result = await repository.search(
-        new SearchParams({ filter: 'does-not-exist' }),
+        new SearchParams({ filter: { query: 'does-not-exist' } }),
       );
 
       expect(result.items).toEqual([]);
@@ -177,7 +180,7 @@ describe('InMemorySearchableUserRepository Unit Tests', () => {
 
     it('should keep original order when sorting by a non-sortable field', async () => {
       const result = await repository.search(
-        new SearchParams({ sort: 'password' }),
+        new SearchParams({ sort: 'password' as UserSortField }),
       );
 
       expect(result.items).toEqual([charlie, alice, bob]);
@@ -185,7 +188,7 @@ describe('InMemorySearchableUserRepository Unit Tests', () => {
 
     it('should trim the sort field before applying it', async () => {
       const result = await repository.search(
-        new SearchParams({ sort: '  name  ' }),
+        new SearchParams({ sort: '  name  ' as UserSortField }),
       );
 
       expect(result.items).toEqual([alice, bob, charlie]);
@@ -242,7 +245,7 @@ describe('InMemorySearchableUserRepository Unit Tests', () => {
     it('should apply filter, sort and pagination together', async () => {
       const result = await repository.search(
         new SearchParams({
-          filter: 'b',
+          filter: { query: 'b' },
           sort: 'name',
           sortDirection: 'desc',
           perPage: 1,
@@ -253,7 +256,7 @@ describe('InMemorySearchableUserRepository Unit Tests', () => {
       expect(result.total).toBe(2);
       expect(result.lastPage).toBe(2);
       expect(result.currentPage).toBe(1);
-      expect(result.filter).toBe('b');
+      expect(result.filter).toEqual({ query: 'b' });
       expect(result.sort).toBe('name');
       expect(result.sortDirection).toBe('desc');
     });
