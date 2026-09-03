@@ -397,7 +397,7 @@ describe('SearchResult', () => {
     it('should default sort to null when undefined is passed', () => {
       const result = new SearchResult({
         ...baseProps,
-        sort: undefined as unknown as string,
+        sort: undefined as unknown as UserSortField,
       });
 
       expect(result.sort).toBeNull();
