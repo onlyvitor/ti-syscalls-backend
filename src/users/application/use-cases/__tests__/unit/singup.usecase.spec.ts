@@ -1,19 +1,28 @@
-import { beforeEach, describe, expect, it } from '@jest/globals';
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { SingUpUseCase, SingUpUseCaseInput } from '../../singup.usecase';
 import { InMemorySearchableUserRepository } from '../../../../infrastructure/repositories/in-memory-searchable-user.repository';
 import { BadRequestException } from '../../../errors/BadRequestExeption.error';
 import { User, UserRole } from '../../../../domain/entities/user.entity';
+import { BcryptHashProvider } from '../../../../infrastructure/providers/hash-provider/bcrypt.hash.provider';
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+class FakeHashProvider implements BcryptHashProvider {
+  generateHash = jest.fn();
+  compareHash = jest.fn();
+}
+
 describe('SingUpUseCase Unit Tests', () => {
   let useCase: SingUpUseCase;
   let repository: InMemorySearchableUserRepository;
+  let hashProvider: FakeHashProvider;
 
   beforeEach(() => {
     repository = new InMemorySearchableUserRepository();
-    useCase = new SingUpUseCase(repository);
+    hashProvider = new FakeHashProvider();
+    hashProvider.generateHash.mockResolvedValue('hashed-password');
+    useCase = new SingUpUseCase(repository, hashProvider);
   });
 
   const validInput = (): SingUpUseCaseInput => ({
@@ -23,29 +32,25 @@ describe('SingUpUseCase Unit Tests', () => {
   });
 
   describe('execute - error cases', () => {
-    it('should throw BadRequestException when name is missing', async () => {
-      const input = { ...validInput(), name: '' };
+    describe.each([
+      ['name', { name: '' }],
+      ['email', { email: '' }],
+      ['password', { password: '' }],
+    ])('when %s is missing', (_field, overrides) => {
+      it('should throw BadRequestException', async () => {
+        const input = { ...validInput(), ...overrides };
 
-      await expect(useCase.execute(input)).rejects.toThrow(BadRequestException);
-    });
-
-    it('should throw BadRequestException when email is missing', async () => {
-      const input = { ...validInput(), email: '' };
-
-      await expect(useCase.execute(input)).rejects.toThrow(BadRequestException);
-    });
-
-    it('should throw BadRequestException when password is missing', async () => {
-      const input = { ...validInput(), password: '' };
-
-      await expect(useCase.execute(input)).rejects.toThrow(BadRequestException);
+        await expect(useCase.execute(input)).rejects.toThrow(
+          BadRequestException,
+        );
+      });
     });
 
     it('should throw BadRequestException with message and details when fields are missing', async () => {
       const input = { ...validInput(), name: '' };
 
       await expect(useCase.execute(input)).rejects.toEqual(
-        expect.objectContaining<Partial<BadRequestException>>({
+        expect.objectContaining({
           name: 'BadRequestException',
           message: 'Missing required fields',
           details: input,
@@ -70,13 +75,12 @@ describe('SingUpUseCase Unit Tests', () => {
     });
 
     it('should throw BadRequestException when email already exists', async () => {
-      const existingUser = User.create(validInput());
-      await repository.insert(existingUser);
+      await repository.insert(User.create(validInput()));
 
       const input = validInput();
 
       await expect(useCase.execute(input)).rejects.toEqual(
-        expect.objectContaining<Partial<BadRequestException>>({
+        expect.objectContaining({
           name: 'BadRequestException',
           message: 'Invalid email',
           details: input,
@@ -85,8 +89,7 @@ describe('SingUpUseCase Unit Tests', () => {
     });
 
     it('should detect an already existing email regardless of casing', async () => {
-      const existingUser = User.create(validInput());
-      await repository.insert(existingUser);
+      await repository.insert(User.create(validInput()));
 
       const input = { ...validInput(), email: 'JOHN.DOE@EXAMPLE.COM' };
 
@@ -96,9 +99,7 @@ describe('SingUpUseCase Unit Tests', () => {
 
   describe('execute - success cases', () => {
     it('should create a user and return its public representation', async () => {
-      const input = validInput();
-
-      const output = await useCase.execute(input);
+      const output = await useCase.execute(validInput());
 
       expect(output).toEqual({
         id: expect.stringMatching(UUID_REGEX),
@@ -138,9 +139,7 @@ describe('SingUpUseCase Unit Tests', () => {
     });
 
     it('should insert the user into the repository', async () => {
-      const input = validInput();
-
-      await useCase.execute(input);
+      await useCase.execute(validInput());
 
       const allUsers = await repository.findAll();
       expect(allUsers).toHaveLength(1);
