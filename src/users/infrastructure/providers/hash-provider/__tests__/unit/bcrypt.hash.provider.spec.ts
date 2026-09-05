@@ -40,4 +40,35 @@ describe('BcryptHashProvider Unit Tests', () => {
       expect(other).toMatch(BCRYPT_HASH_REGEX);
     });
   });
+
+  describe('compareHash', () => {
+    it('should return true when the payload matches the hash', async () => {
+      await expect(provider.compareHash('password123', hashed)).resolves.toBe(
+        true,
+      );
+    });
+
+    it('should return false when the payload does not match the hash', async () => {
+      await expect(
+        provider.compareHash('wrong-password', hashed),
+      ).resolves.toBe(false);
+    });
+
+    it('should return false when comparing against an empty hash', async () => {
+      await expect(provider.compareHash('password123', '')).resolves.toBe(
+        false,
+      );
+    });
+  });
+
+  describe('round-trip', () => {
+    it('should generate a hash that compareHash validates', async () => {
+      const payload = 'superSecret123';
+
+      const generated = await provider.generateHash(payload);
+      const isValid = await provider.compareHash(payload, generated);
+
+      expect(isValid).toBe(true);
+    });
+  });
 });
