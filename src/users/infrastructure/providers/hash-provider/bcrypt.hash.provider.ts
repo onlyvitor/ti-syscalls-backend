@@ -6,4 +6,9 @@ export class BcryptHashProvider implements HashProvider {
     const hashed = await bcrypt.hash(payload, 12);
     return hashed;
   }
+
+  async compareHash(payload: string, hashed: string): Promise<boolean> {
+    const isValid = await bcrypt.compare(payload, hashed);
+    return isValid;
+  }
 }
