@@ -11,7 +11,7 @@ export class User {
   private readonly id: string;
   private role: UserRole;
 
-  private constructor(
+  constructor(
     private name: string,
     private email: Email,
     private password: string,

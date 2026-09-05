@@ -1,3 +1,8 @@
+import { Email } from 'src/users/domain/value-objects/email.vo';
+import { BadRequestException } from '../errors/BadRequestExeption.error';
+import { SearchableUserRepository } from 'src/users/domain/repositories/searchable-user.repository';
+import { User } from 'src/users/domain/entities/user.entity';
+
 export type SingUpUseCaseInput = {
   name: string;
   email: string;
@@ -12,5 +17,26 @@ export type SingUpUseCaseOutput = {
 };
 
 export class SingUpUseCase {
-  async execute(input: SingUpUseCaseInput): Promise<SingUpUseCaseOutput> {}
+  constructor(private readonly userRepository: SearchableUserRepository) {}
+  async execute(input: SingUpUseCaseInput): Promise<SingUpUseCaseOutput> {
+    if (!input.name || !input.email || !input.password) {
+      throw new BadRequestException('Missing required fields', input);
+    }
+    //create vo email here
+    const email = Email.create(input.email);
+
+    if (await this.userRepository.findByEmail(email)) {
+      throw new BadRequestException('Invalid email', input);
+    }
+
+    const user = new User(input.name, email, input.password);
+    await this.userRepository.insert(user);
+
+    return {
+      id: user.getId(),
+      name: user.getName(),
+      email: user.getEmail(),
+      role: user.getRole(),
+    };
+  }
 }
