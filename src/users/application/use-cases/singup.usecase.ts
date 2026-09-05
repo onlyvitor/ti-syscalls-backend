@@ -12,7 +12,5 @@ export type SingUpUseCaseOutput = {
 };
 
 export class SingUpUseCase {
-  async execute(input: SingUpUseCaseInput): Promise<SingUpUseCaseOutput> {
-    // Implementation for signing up a user
-  }
+  async execute(input: SingUpUseCaseInput): Promise<SingUpUseCaseOutput> {}
 }
