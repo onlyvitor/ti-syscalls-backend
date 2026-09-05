@@ -126,6 +126,18 @@ describe('SingUpUseCase Unit Tests', () => {
       expect(output.email).toBe('john.doe@example.com');
     });
 
+    it('should hash the password before persisting the user', async () => {
+      const input = validInput();
+
+      const output = await useCase.execute(input);
+
+      expect(hashProvider.generateHash).toHaveBeenCalledWith(input.password);
+
+      const persisted = await repository.findById(output.id);
+      expect(persisted?.hasPassword('hashed-password')).toBe(true);
+      expect(persisted?.hasPassword(input.password)).toBe(false);
+    });
+
     it('should persist the created user in the repository', async () => {
       const output = await useCase.execute(validInput());
 
