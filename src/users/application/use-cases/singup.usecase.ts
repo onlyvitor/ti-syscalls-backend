@@ -2,6 +2,7 @@ import { Email } from 'src/users/domain/value-objects/email.vo';
 import { BadRequestException } from '../errors/BadRequestExeption.error';
 import { SearchableUserRepository } from 'src/users/domain/repositories/searchable-user.repository';
 import { User } from 'src/users/domain/entities/user.entity';
+import { BcryptHashProvider } from 'src/users/infrastructure/providers/hash-provider/bcrypt.hash.provider';
 
 export type SingUpUseCaseInput = {
   name: string;
@@ -17,7 +18,10 @@ export type SingUpUseCaseOutput = {
 };
 
 export class SingUpUseCase {
-  constructor(private readonly userRepository: SearchableUserRepository) {}
+  constructor(
+    private readonly userRepository: SearchableUserRepository,
+    private readonly hashProvider: BcryptHashProvider,
+  ) {}
   async execute(input: SingUpUseCaseInput): Promise<SingUpUseCaseOutput> {
     if (!input.name || !input.email || !input.password) {
       throw new BadRequestException('Missing required fields', input);
@@ -29,7 +33,9 @@ export class SingUpUseCase {
       throw new BadRequestException('Invalid email', input);
     }
 
-    const user = new User(input.name, email, input.password);
+    //hash password here
+    const hashedPassword = await this.hashProvider.generateHash(input.password);
+    const user = new User(input.name, email, hashedPassword);
     await this.userRepository.insert(user);
 
     return {
