@@ -1,3 +1,5 @@
+import { InvalidEmailError } from '../errors/invalid-email.error';
+
 export class Email {
   private readonly value: string;
 
@@ -9,12 +11,12 @@ export class Email {
     const trimmed = raw.trim().toLowerCase();
 
     if (!trimmed) {
-      throw new Error('Email cannot be empty');
+      throw new InvalidEmailError('Email cannot be empty', raw);
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(trimmed)) {
-      throw new Error(`Invalid email format: ${raw}`);
+      throw new InvalidEmailError(`Invalid email format: ${raw}`, raw);
     }
 
     return new Email(trimmed);

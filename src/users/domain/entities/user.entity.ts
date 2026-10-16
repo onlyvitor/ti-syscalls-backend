@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { Email } from '../value-objects/email.vo';
+import { InvalidNameError } from '../errors/invalid-name.error';
 
 export enum UserRole {
   USER = 'user',
@@ -7,18 +8,27 @@ export enum UserRole {
   ADMIN = 'admin',
 }
 
+export type UserProps = {
+  id: string;
+  name: string;
+  email: Email;
+  password: string;
+  role: UserRole;
+};
+
 export class User {
   private readonly id: string;
   private role: UserRole;
 
   constructor(
+    id: string,
     private name: string,
     private email: Email,
     private password: string,
     role?: UserRole,
   ) {
-    this.id = randomUUID();
-    this.role = role || UserRole.USER;
+    this.id = id;
+    this.role = role ?? UserRole.USER;
   }
 
   static create(data: {
@@ -27,17 +37,34 @@ export class User {
     password: string;
     role?: UserRole;
   }): User {
+    const name = data.name?.trim() ?? '';
+
+    if (!name) {
+      throw new InvalidNameError('Name cannot be empty', data.name);
+    }
+
     return new User(
-      data.name.trim(),
+      randomUUID(),
+      name,
       Email.create(data.email),
       data.password,
       data.role,
     );
   }
 
+  static reconstitute(props: UserProps): User {
+    return new User(
+      props.id,
+      props.name,
+      props.email,
+      props.password,
+      props.role,
+    );
+  }
+
   updateName(newName: string): void {
     if (!newName || !newName.trim()) {
-      throw new Error('Name cannot be empty');
+      throw new InvalidNameError('Name cannot be empty', newName);
     }
     this.name = newName.trim();
   }
@@ -66,7 +93,7 @@ export class User {
     return this.role;
   }
 
-  hasPassword(candidate: string): boolean {
-    return this.password === candidate;
+  getPassword(): string {
+    return this.password;
   }
 }

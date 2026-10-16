@@ -23,8 +23,7 @@ describe('User Entity Unit Tests', () => {
       expect(user.getName()).toBe('John Doe');
       expect(user.getEmail()).toBe('john.doe@example.com');
       expect(user.getRole()).toBe(UserRole.USER);
-      expect(user.hasPassword('securePassword123')).toBe(true);
-      expect(user.hasPassword('wrong-password')).toBe(false);
+      expect(user.getPassword()).toBe('securePassword123');
     });
 
     it('should use USER as the default role', () => {
@@ -82,6 +81,16 @@ describe('User Entity Unit Tests', () => {
       ).toThrow('Invalid email format: invalid-email');
     });
 
+    it('should throw an error if an empty name is provided', () => {
+      expect(() =>
+        User.create({
+          name: '   ',
+          email: 'empty.name@example.com',
+          password: 'password123',
+        }),
+      ).toThrow('Name cannot be empty');
+    });
+
     it('should throw an error if an empty email is provided', () => {
       expect(() =>
         User.create({
@@ -114,9 +123,47 @@ describe('User Entity Unit Tests', () => {
       expect(user.getRole()).toBe(UserRole.USER);
     });
 
-    it('should validate password correctly with hasPassword()', () => {
-      expect(user.hasPassword('securePassword123')).toBe(true);
-      expect(user.hasPassword('otherPassword')).toBe(false);
+    it('should expose the stored (hashed) password with getPassword()', () => {
+      expect(user.getPassword()).toBe('securePassword123');
+      expect(user.getPassword()).not.toBe('otherPassword');
+    });
+  });
+
+  describe('reconstitute', () => {
+    it('should rebuild a user with the persisted identity and data', () => {
+      const reconstituted = User.reconstitute({
+        id: '00000000-0000-4000-8000-000000000001',
+        name: 'Persisted User',
+        email: user.getEmail(),
+        password: user.getPassword(),
+        role: UserRole.ADMIN,
+      });
+
+      expect(reconstituted.getId()).toBe(
+        '00000000-0000-4000-8000-000000000001',
+      );
+      expect(reconstituted.getName()).toBe('Persisted User');
+      expect(reconstituted.getEmail()).toBe(user.getEmail());
+      expect(reconstituted.getPassword()).toBe(user.getPassword());
+      expect(reconstituted.getRole()).toBe(UserRole.ADMIN);
+    });
+
+    it('should keep the provided identity instead of generating a new one', () => {
+      const a = User.reconstitute({
+        id: 'identity-1',
+        name: 'A',
+        email: user.getEmail(),
+        password: 'x',
+        role: UserRole.USER,
+      });
+      const b = User.create({
+        name: 'B',
+        email: 'b@example.com',
+        password: 'x',
+      });
+
+      expect(a.getId()).toBe('identity-1');
+      expect(b.getId()).not.toBe(a.getId());
     });
   });
 
