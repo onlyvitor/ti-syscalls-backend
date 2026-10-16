@@ -1,4 +1,4 @@
-import bcrypt from 'node_modules/bcryptjs';
+import bcrypt from 'bcryptjs';
 import { HashProvider } from 'src/shared/application/providers/hash.provider';
 
 export class BcryptHashProvider implements HashProvider {
