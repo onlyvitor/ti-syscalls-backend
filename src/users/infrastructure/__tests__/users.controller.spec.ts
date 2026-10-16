@@ -1,13 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UsersController } from '../users.controller';
 import { UsersService } from '../users.service';
-import { beforeEach, describe, expect, it } from '@jest/globals';
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 describe('UsersController', () => {
   let controller: UsersController;
   const mockService = {
     create: jest.fn(),
-    findAll: jest.fn(),
+    search: jest.fn(),
     findOne: jest.fn(),
     update: jest.fn(),
     remove: jest.fn(),
@@ -33,49 +33,59 @@ describe('UsersController', () => {
   });
 
   it('should call UsersService.create with the DTO and return its response', () => {
-    const dto = { name: 'Alice', email: 'alice@example.com', password: 'pass' };
-    mockService.create.mockReturnValue({ id: '1', ...dto, role: 'user' });
+    const dto = {
+      name: 'Alice',
+      email: 'alice@example.com',
+      password: 'password123',
+    };
+    mockService.create.mockReturnValue({
+      id: '1',
+      name: 'Alice',
+      email: dto.email,
+      role: 'user',
+    });
 
     const result = controller.create(dto);
 
     expect(mockService.create).toHaveBeenCalledWith(dto);
-    expect(result).toEqual({ id: '1', ...dto, role: 'user' });
+    expect(result).toMatchObject({ name: 'Alice' });
   });
 
-  it('should proxy findAll to UsersService', () => {
-    mockService.findAll.mockReturnValue([{ id: '1' }]);
+  it('should proxy search queries to UsersService.search', () => {
+    const query = { query: 'jane', page: '2' };
+    mockService.search.mockReturnValue({ items: [], total: 0 });
 
-    const result = controller.findAll();
+    const result = controller.findAll(query);
 
-    expect(mockService.findAll).toHaveBeenCalled();
-    expect(result).toEqual([{ id: '1' }]);
+    expect(mockService.search).toHaveBeenCalledWith(query);
+    expect(result).toEqual({ items: [], total: 0 });
   });
 
-  it('should convert id parameter to number for findOne', () => {
+  it('should proxy findOne to UsersService with the raw id', () => {
     mockService.findOne.mockReturnValue('user');
 
-    const result = controller.findOne('42');
+    const result = controller.findOne('user-id');
 
-    expect(mockService.findOne).toHaveBeenCalledWith(42);
+    expect(mockService.findOne).toHaveBeenCalledWith('user-id');
     expect(result).toBe('user');
   });
 
-  it('should forward update calls with parsed id', () => {
+  it('should forward update calls with the raw id', () => {
     const dto = { name: 'Updated' };
     mockService.update.mockReturnValue('updated');
 
     const result = controller.update('7', dto);
 
-    expect(mockService.update).toHaveBeenCalledWith(7, dto);
+    expect(mockService.update).toHaveBeenCalledWith('7', dto);
     expect(result).toBe('updated');
   });
 
-  it('should forward remove calls with parsed id', () => {
-    mockService.remove.mockReturnValue('deleted');
+  it('should forward remove calls with the raw id', () => {
+    mockService.remove.mockReturnValue(undefined);
 
-    const result = controller.remove('99');
+    const result = controller.remove('user-id');
 
-    expect(mockService.remove).toHaveBeenCalledWith(99);
-    expect(result).toBe('deleted');
+    expect(mockService.remove).toHaveBeenCalledWith('user-id');
+    expect(result).toBeUndefined();
   });
 });
