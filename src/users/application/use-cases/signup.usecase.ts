@@ -1,42 +1,47 @@
 import { Email } from 'src/users/domain/value-objects/email.vo';
-import { BadRequestException } from '../errors/BadRequestExeption.error';
+import { BadRequestException } from '../errors/bad-request.error';
 import { SearchableUserRepository } from 'src/users/domain/repositories/searchable-user.repository';
 import { User } from 'src/users/domain/entities/user.entity';
+import { UsersAlreadyExistError } from 'src/users/domain/errors/users-already-exist.error';
 import { HashProvider } from 'src/shared/application/providers/hash.provider';
 import { OutputUserDto } from 'src/users/presentation/outputuser.dto';
+import { toOutputUserDto } from 'src/users/presentation/user-presenter';
 
-export type SingUpUseCaseInput = {
+export type SignupUseCaseInput = {
   name: string;
   email: string;
   password: string;
 };
 
-export class SingUpUseCase {
+export class SignupUseCase {
   constructor(
     private readonly userRepository: SearchableUserRepository,
     private readonly hashProvider: HashProvider,
   ) {}
-  async execute(input: SingUpUseCaseInput): Promise<OutputUserDto> {
+
+  async execute(input: SignupUseCaseInput): Promise<OutputUserDto> {
     if (!input.name || !input.email || !input.password) {
       throw new BadRequestException('Missing required fields', input);
     }
-    //create vo email here
+
     const email = Email.create(input.email);
 
-    if (await this.userRepository.findByEmail(email)) {
-      throw new BadRequestException('Invalid email', input);
+    const existingUser = await this.userRepository.findByEmail(email);
+    if (existingUser) {
+      throw new UsersAlreadyExistError(
+        `User with email ${email.valueOf()} already exists`,
+        input,
+      );
     }
 
-    //hash password here
     const hashedPassword = await this.hashProvider.generateHash(input.password);
-    const user = new User(input.name, email, hashedPassword);
+    const user = User.create({
+      name: input.name,
+      email: email.valueOf(),
+      password: hashedPassword,
+    });
     await this.userRepository.insert(user);
 
-    return {
-      id: user.getId(),
-      name: user.getName(),
-      email: user.getEmail(),
-      role: user.getRole(),
-    };
+    return toOutputUserDto(user);
   }
 }

@@ -2,14 +2,14 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { GetUserUseCase, GetUserUseCaseInput } from '../../getuser.usecase';
 import { InMemoryUserRepository } from '../../../../infrastructure/repositories/in-memory-user.repository';
 import { User, UserRole } from '../../../../domain/entities/user.entity';
-import { NotFoundException } from '../../../errors/NotFoundException.error';
+import { NotFoundException } from '../../../errors/not-found.error';
 
 describe('GetUserUseCase Unit Tests', () => {
   let useCase: GetUserUseCase;
   let repository: InMemoryUserRepository;
   let user: User;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     repository = new InMemoryUserRepository();
     useCase = new GetUserUseCase(repository);
     user = User.create({
@@ -17,7 +17,7 @@ describe('GetUserUseCase Unit Tests', () => {
       email: 'john.doe@example.com',
       password: 'securePassword123',
     });
-    repository.insert(user);
+    await repository.insert(user);
   });
 
   const validInput = (): GetUserUseCaseInput => ({
@@ -80,7 +80,7 @@ describe('GetUserUseCase Unit Tests', () => {
     it('should throw NotFoundException with the expected message', async () => {
       await expect(useCase.execute({ id: 'unknown-id' })).rejects.toEqual(
         expect.objectContaining({
-          name: 'DomainError',
+          name: 'NotFoundException',
           message: 'User not found',
         }),
       );

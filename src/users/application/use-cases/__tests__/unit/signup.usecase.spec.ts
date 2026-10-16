@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { SingUpUseCase, SingUpUseCaseInput } from '../../singup.usecase';
+import { SignupUseCase, SignupUseCaseInput } from '../../signup.usecase';
 import { InMemorySearchableUserRepository } from '../../../../infrastructure/repositories/in-memory-searchable-user.repository';
-import { BadRequestException } from '../../../errors/BadRequestExeption.error';
+import { BadRequestException } from '../../../errors/bad-request.error';
+import { UsersAlreadyExistError } from '../../../../domain/errors/users-already-exist.error';
 import { User, UserRole } from '../../../../domain/entities/user.entity';
 import { HashProvider } from 'src/shared/application/providers/hash.provider';
 
@@ -13,8 +14,8 @@ class FakeHashProvider implements HashProvider {
   compareHash = jest.fn();
 }
 
-describe('SingUpUseCase Unit Tests', () => {
-  let useCase: SingUpUseCase;
+describe('SignupUseCase Unit Tests', () => {
+  let useCase: SignupUseCase;
   let repository: InMemorySearchableUserRepository;
   let hashProvider: FakeHashProvider;
 
@@ -22,10 +23,10 @@ describe('SingUpUseCase Unit Tests', () => {
     repository = new InMemorySearchableUserRepository();
     hashProvider = new FakeHashProvider();
     hashProvider.generateHash.mockResolvedValue('hashed-password');
-    useCase = new SingUpUseCase(repository, hashProvider);
+    useCase = new SignupUseCase(repository, hashProvider);
   });
 
-  const validInput = (): SingUpUseCaseInput => ({
+  const validInput = (): SignupUseCaseInput => ({
     name: 'John Doe',
     email: 'john.doe@example.com',
     password: 'securePassword123',
@@ -74,26 +75,27 @@ describe('SingUpUseCase Unit Tests', () => {
       );
     });
 
-    it('should throw BadRequestException when email already exists', async () => {
+    it('should throw UsersAlreadyExistError when email already exists', async () => {
       await repository.insert(User.create(validInput()));
 
       const input = validInput();
 
       await expect(useCase.execute(input)).rejects.toEqual(
         expect.objectContaining({
-          name: 'BadRequestException',
-          message: 'Invalid email',
-          details: input,
+          name: 'UsersAlreadyExistError',
+          message: 'User with email john.doe@example.com already exists',
         }),
       );
     });
 
-    it('should detect an already existing email regardless of casing', async () => {
+    it('should raise UsersAlreadyExistError regardless of email casing', async () => {
       await repository.insert(User.create(validInput()));
 
       const input = { ...validInput(), email: 'JOHN.DOE@EXAMPLE.COM' };
 
-      await expect(useCase.execute(input)).rejects.toThrow(BadRequestException);
+      await expect(useCase.execute(input)).rejects.toThrow(
+        UsersAlreadyExistError,
+      );
     });
   });
 
@@ -134,8 +136,8 @@ describe('SingUpUseCase Unit Tests', () => {
       expect(hashProvider.generateHash).toHaveBeenCalledWith(input.password);
 
       const persisted = await repository.findById(output.id);
-      expect(persisted?.hasPassword('hashed-password')).toBe(true);
-      expect(persisted?.hasPassword(input.password)).toBe(false);
+      expect(persisted?.getPassword()).toBe('hashed-password');
+      expect(persisted?.getPassword()).not.toBe(input.password);
     });
 
     it('should persist the created user in the repository', async () => {
