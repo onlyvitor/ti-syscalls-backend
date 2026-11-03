@@ -12,7 +12,7 @@ The first bounded context in place is **Users**. Ticket management is the intend
 
 A support desk needs more than a ticket table. People sign up, emails have to be valid and unique, passwords cannot be stored in plain text, and roles change what someone is allowed to do later (`user`, `technician`, `admin`).
 
-That is the slice this backend currently models. HTTP exists as a NestJS REST API. Persistence is still in-memory. The signup use case already encodes the user-registration rules, even though it is not wired to a controller yet.
+That is the slice this backend currently models. HTTP exists as a NestJS REST API with signup, login, JWT authentication, and role/ownership authorization. Persistence is still in-memory.
 
 Who this code is for today:
 
@@ -24,17 +24,20 @@ Who this code is for today:
 What the code actually does today:
 
 - **User domain model** — identity, name, email, password, and role (`user`, `technician`, `admin`).
-- **User registration rules** — `SingUpUseCase` validates required fields, normalizes email, rejects duplicates, hashes the password, and inserts the user through a repository port.
+- **User registration rules** — `SignupUseCase` validates required fields, normalizes email, rejects duplicates, hashes the password, and inserts the user through a repository port.
 - **Email as a value object** — trim, lowercase, format check, value equality.
 - **Password hashing** — `HashProvider` port with a `bcryptjs` adapter (cost factor 12).
 - **In-memory user persistence** — insert, find by id/email, list, update, delete.
 - **Searchable users** — filter by query (name or email), name, email, and role; sort by `name`, `email`, or `role`; paginate (default page `1`, per page `15`).
-- **Users HTTP resource** — NestJS `UsersController` under `/users`. `POST /users` creates a `User` through the domain factory. `GET`, `PATCH`, and `DELETE` are still generated stubs.
+- **Users HTTP resource** — NestJS `UsersController` under `/users`. `POST` registers a user through `SignupUseCase`; `GET`, `PATCH`, and `DELETE` run their own use cases, with validation, pagination, filtering, and ordering.
+- **Authentication** — `POST /auth/login` verifies the password with bcrypt and issues a signed JWT.
+- **Authorization** — global JWT guard, role-based access (`user`, `technician`, `admin`), and ownership checks in the application layer.
+- **Protected user operations** — only admins can delete users or change roles; users can read and update only their own profile.
 
 What is **not** implemented:
 
 - ticket/syscall lifecycle;
-- authentication or authorization;
+- refresh tokens, token revocation, or password reset;
 - PostgreSQL or any other database;
 - Docker;
 - OpenAPI/Swagger.
@@ -49,6 +52,8 @@ Confirmed from `package.json` and source:
 | Runtime | Node.js |
 | HTTP framework | NestJS 11 (`@nestjs/platform-express`) |
 | API style | REST |
+| Authentication | JWT (`@nestjs/jwt`) |
+| Configuration | `@nestjs/config` with boot-time validation |
 | Password hashing | `bcryptjs` |
 | Tests | Jest, ts-jest, Supertest |
 | Lint / format | ESLint, Prettier |
@@ -69,17 +74,24 @@ Presentation is not a separate top-level folder. HTTP controllers and the NestJS
 
 ```mermaid
 flowchart TB
-  client[HTTP client] --> presentation[UsersController]
-  presentation --> nestService[UsersService]
-  presentation -.-> useCases[SingUpUseCase]
+  client[HTTP client] --> usersController[UsersController]
+  client --> authController[AuthController]
 
-  nestService --> domain[User / Email]
-  useCases --> domain
+  usersController --> nestService[UsersService]
+  usersController -.-> useCases[User use cases]
+  authController --> loginUseCase[LoginUseCase]
+
+  nestService --> useCases
+  useCases --> domain[User / Email]
   useCases --> repoPort[UserRepository / SearchableUserRepository]
   useCases --> hashPort[HashProvider]
+  loginUseCase --> repoPort
+  loginUseCase --> hashPort
+  loginUseCase --> tokenPort[TokenProvider]
 
   repoImpl[InMemory*UserRepository] -.-> repoPort
   hashImpl[BcryptHashProvider] -.-> hashPort
+  tokenImpl[JwtTokenProvider] -.-> tokenPort
 
   subgraph domainLayer [Domain]
     domain
@@ -88,32 +100,37 @@ flowchart TB
 
   subgraph applicationLayer [Application]
     useCases
+    loginUseCase
     hashPort
+    tokenPort
   end
 
   subgraph infrastructureLayer [Infrastructure]
-    presentation
+    usersController
+    authController
     nestService
     repoImpl
     hashImpl
+    tokenImpl
   end
 ```
 
-`UsersService` is a NestJS provider in infrastructure — the path the controller actually calls. Application logic for signup lives in `SingUpUseCase`, which is implemented and tested, but `UsersModule` does not register it yet. The dashed arrow is the intended flow, not the current HTTP wiring.
+`UsersService` is a NestJS provider in infrastructure — the path `UsersController` actually calls. The user use cases are wired in `UsersModule`; `LoginUseCase` is wired in `AuthModule`, which imports `UsersModule` to reuse the same repository and hash provider. `JwtAuthGuard` and `RolesGuard` are registered as global guards, so every route is protected unless marked `@Public()`.
 
 ### How dependencies flow
 
-- `src/users/domain` does not import NestJS, bcrypt, or HTTP types.
+- `src/users/domain` does not import NestJS, bcrypt, JWT, or HTTP types.
 - Shared repository ports in `src/shared/domain/repositories` only talk about entities, ids, filters, and pagination.
-- Application code depends on those ports, not on a storage engine.
-- Infrastructure implements the ports: `InMemoryUserRepository`, `InMemorySearchableUserRepository`, `BcryptHashProvider`.
-- NestJS stays at the edges: `AppModule`, `UsersModule`, controllers, and `UsersService`.
+- Application code depends on those ports, not on a storage engine or token implementation.
+- Infrastructure implements the ports: `InMemoryUserRepository`, `InMemorySearchableUserRepository`, `BcryptHashProvider`, `JwtTokenProvider`.
+- `src/auth` depends on the users domain/repository contracts, not the other way around.
+- NestJS stays at the edges: `AppModule`, `UsersModule`, `AuthModule`, controllers, and `UsersService`.
 
 That is the dependency rule in practice: domain does not know how it is stored or exposed.
 
 ### Bounded context
 
-Only one context exists: **Users**, under `src/users`. Shared kernel code lives in `src/shared` (repository contracts, `DomainError`, `HashProvider`).
+Only one business context exists: **Users**, under `src/users`. Authentication lives in `src/auth`, a supporting module that depends on Users. Shared kernel code lives in `src/shared` (repository contracts, `DomainError`, `HashProvider`, `ForbiddenError`, configuration).
 
 `UserRole.TECHNICIAN` is a hint of the support-desk domain that is still missing. There is no tickets module.
 
@@ -123,27 +140,46 @@ Only one context exists: **Users**, under `src/users`. Shared kernel code lives 
 src/
 ├── main.ts
 ├── app.module.ts
+├── auth/
+│   ├── application/
+│   │   ├── errors/                InvalidCredentialsError
+│   │   ├── providers/             TokenProvider port
+│   │   └── use-cases/             LoginUseCase
+│   ├── infrastructure/
+│   │   ├── decorators/            Public, Roles, CurrentUser
+│   │   ├── guards/                JwtAuthGuard, RolesGuard
+│   │   ├── providers/             JwtTokenProvider
+│   │   ├── auth.controller.ts
+│   │   ├── auth.module.ts
+│   │   └── auth.providers.ts
+│   └── presentation/              LoginDto, LoginResponseDto
 ├── shared/
-│   ├── application/providers/     HashProvider port
-│   └── domain/
-│       ├── global-contract.error.ts
-│       └── repositories/          Repository, SearchableRepository
+│   ├── application/
+│   │   ├── errors/                ForbiddenError
+│   │   └── providers/             HashProvider port
+│   ├── domain/
+│   │   ├── global-contract.error.ts
+│   │   └── repositories/          Repository, SearchableRepository
+│   └── infrastructure/
+│       ├── config/                boot-time environment validation
+│       └── http/                  global exception filter
 └── users/
     ├── application/
     │   ├── errors/
-    │   └── use-cases/             SingUpUseCase
+    │   ├── types/                 Actor
+    │   └── use-cases/             Signup, Get, Update, Delete, Search
     ├── domain/
     │   ├── entities/              User, UserRole
     │   ├── errors/
     │   ├── repositories/          UserRepository, SearchableUserRepository
     │   └── value-objects/         Email
-    └── infrastructure/
-        ├── dto/
-        ├── providers/hash-provider/
-        ├── repositories/          in-memory adapters
-        ├── users.controller.ts
-        ├── users.service.ts
-        └── users.module.ts
+    ├── infrastructure/
+    │   ├── providers/hash-provider/
+    │   ├── repositories/          in-memory adapters
+    │   ├── users.controller.ts
+    │   ├── users.service.ts
+    │   └── users.module.ts
+    └── presentation/              DTOs and User output presenter
 ```
 
 Tests sit next to the code they cover, usually under `__tests__/unit`. End-to-end tests live in `test/`.
@@ -184,7 +220,7 @@ User ports:
 
 Adapters live in infrastructure. They implement the contracts; they do not define them.
 
-### Use case — `SingUpUseCase`
+### Use case — `SignupUseCase`
 
 Application-layer registration:
 
@@ -195,22 +231,40 @@ Application-layer registration:
 5. create a `User` and `insert` it;
 6. return `{ id, name, email, role }` without the password.
 
-This use case is covered by unit tests. It is not bound to `UsersController`.
+This use case is covered by unit tests and bound to `POST /users` through `UsersService`.
+
+### Use case — `LoginUseCase`
+
+Application-layer authentication:
+
+1. normalize the e-mail through the `Email` value object;
+2. find the user by e-mail (`findByEmail`);
+3. compare the supplied password with the stored hash (`compareHash`), using a dummy hash when the user does not exist to keep the failure path expensive;
+4. throw `InvalidCredentialsError` with a generic message for both unknown e-mail and wrong password;
+5. issue a JWT containing `sub`, `email`, and `role`;
+6. return `{ accessToken, user }` without the password.
+
+Authentication never reveals whether an e-mail exists. The token is accepted by the global `JwtAuthGuard` and its `role` claim is used by `RolesGuard`.
 
 ### Ports / providers
 
 - `HashProvider` (`generateHash`, `compareHash`) in `src/shared/application/providers`.
 - `BcryptHashProvider` in users infrastructure.
+- `TokenProvider` (`generate`, `verify`) in `src/auth/application/providers`.
+- `JwtTokenProvider` in auth infrastructure.
 
 ### DTOs
 
-`CreateUserDto` and `UpdateUserDto` live in infrastructure. They are HTTP input shapes, not domain types. `UpdateUserDto` repeats the create fields as optional.
+`CreateUserDto` and `UpdateUserDto` live in `src/users/presentation`. `LoginDto` and `LoginResponseDto` live in `src/auth/presentation`. They are HTTP shapes, not domain types. `UpdateUserDto` repeats the create fields as optional.
 
 ### Errors
 
-- `DomainError` — shared base error with optional `details`.
-- `BadRequestException` — used by `SingUpUseCase` for missing fields and duplicate emails.
-- `UsersAlreadyExistError` — defined, not used by the signup flow yet.
+- `DomainError` — shared base error with optional `details` and `httpStatus`.
+- `BadRequestException` — used for missing fields and invalid update payloads.
+- `UsersAlreadyExistError` — duplicate e-mail, mapped to `409`.
+- `NotFoundException` — unknown user, mapped to `404`.
+- `InvalidCredentialsError` — login failure, mapped to `401`.
+- `ForbiddenError` — ownership/role denial, mapped to `403`.
 
 There are no domain events and no dedicated domain services.
 
@@ -218,9 +272,29 @@ There are no domain events and no dedicated domain services.
 
 No Swagger. NestJS listens on `process.env.PORT` or **3000**.
 
+All routes are protected by default. Send the token returned by `POST /auth/login` as:
+
+```text
+Authorization: Bearer <accessToken>
+```
+
+Routes marked as public use `@Public()`. Protected routes return `401` without a valid token and `403` when the authenticated role is insufficient.
+
+### Permission matrix
+
+| Endpoint | Public | `user` | `technician` | `admin` |
+| --- | --- | --- | --- | --- |
+| `GET /` | yes | — | — | — |
+| `POST /auth/login` | yes | — | — | — |
+| `POST /users` | yes | — | — | — |
+| `GET /users` | no | no | yes | yes |
+| `GET /users/:id` | no | own user | any | any |
+| `PATCH /users/:id` | no | own name/e-mail | no | any, including `role` |
+| `DELETE /users/:id` | no | no | no | yes |
+
 ### `GET /`
 
-Health/hello endpoint from the Nest starter.
+Health/hello endpoint from the Nest starter. Public.
 
 **Response:** `200` with body `Hello World!`
 
@@ -228,9 +302,30 @@ Health/hello endpoint from the Nest starter.
 curl http://localhost:3000/
 ```
 
+### `POST /auth/login`
+
+Authenticates a user and returns a JWT.
+
+**Body:**
+
+```json
+{
+  "email": "jane.doe@example.com",
+  "password": "secretPassword123"
+}
+```
+
+**Response:** `200` with `{ accessToken, user: { id, name, email, role } }`. The password is never returned. Unknown e-mail and wrong password both return `401` with `Invalid email or password`.
+
+```bash
+curl -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"jane.doe@example.com","password":"secretPassword123"}'
+```
+
 ### `POST /users`
 
-Creates a `User` via `UsersService.create` → `User.create`. It does **not** run `SingUpUseCase`: no repository insert, no password hash, no uniqueness check.
+Public registration through `SignupUseCase`. It validates required fields, normalizes the e-mail, rejects duplicates, hashes the password, and persists the user.
 
 **Body:**
 
@@ -238,38 +333,46 @@ Creates a `User` via `UsersService.create` → `User.create`. It does **not** ru
 {
   "name": "Jane Doe",
   "email": "jane.doe@example.com",
-  "password": "secret",
-  "role": "user"
+  "password": "secretPassword123"
 }
 ```
 
-`role` is optional. Allowed values: `user`, `technician`, `admin`.
+`role` is not part of the registration contract. Any `role` sent by an anonymous client is stripped by the validation whitelist, so signup always creates a `user`.
 
-**Response:** `{ id, name, email, role }` (no password). Email is normalized. Invalid emails throw from the domain.
+**Response:** `201` with `{ id, name, email, role }` (no password).
 
 ```bash
 curl -X POST http://localhost:3000/users \
   -H "Content-Type: application/json" \
-  -d '{"name":"Jane Doe","email":"jane.doe@example.com","password":"secret"}'
+  -d '{"name":"Jane Doe","email":"jane.doe@example.com","password":"secretPassword123"}'
 ```
 
 ### `GET /users`
 
-Stub. Returns the string `This action returns all users`.
+Search users with filtering, sorting, and pagination. Requires `admin` or `technician`.
+
+Query parameters: `query`, `name`, `email`, `role`, `sort` (`name`, `email`, `role`), `sortDirection` (`asc`, `desc`), `page` (default `1`), `perPage` (default `15`).
+
+**Response:** `200` with `{ items, total, currentPage, perPage, lastPage, sort, sortDirection, filter }`.
+
+```bash
+curl "http://localhost:3000/users?role=technician&sort=name&page=1" \
+  -H "Authorization: Bearer $TOKEN"
+```
 
 ### `GET /users/:id`
 
-Stub. `:id` is parsed with `+id` (number). Returns `This action returns a #{id} user`.
+Returns a user. A `user` can read only their own record; `technician` and `admin` can read any record. Unknown ids return `404`.
 
 ### `PATCH /users/:id`
 
-Stub. Body is `UpdateUserDto` (any subset of create fields). Returns a string describing the update.
+Updates `name` and/or `email`. A `user` can update only their own name/e-mail; `technician` cannot update other users; `admin` can update any user and change `role`. A non-admin trying to change `role` receives `403`.
+
+Body: any subset of `{ name, email, role }`. Unknown roles and invalid e-mails return `400`; duplicate e-mails return `409`.
 
 ### `DELETE /users/:id`
 
-Stub. Returns `This action removes a #{id} user`.
-
-Search (`SearchableUserRepository.search`) is not exposed over HTTP.
+Removes a user. Requires `admin`. Returns `204`; unknown ids return `404`.
 
 ## Persistence
 
@@ -330,13 +433,15 @@ There is no Docker setup and no migration command.
 
 ## Environment variables
 
-There is no `.env.example`. The only variable read in source is:
+`.env.example` documents the expected variables. `ConfigModule` loads `.env` and validates the configuration at boot; an invalid environment fails fast.
 
 | Variable | Description | Required |
 | -------- | ----------- | -------- |
 | `PORT` | HTTP port. Defaults to `3000`. | no |
+| `JWT_SECRET` | Secret used to sign and verify JWTs. | yes |
+| `JWT_EXPIRES_IN` | Token lifetime. Defaults to `1h`. | no |
 
-`.gitignore` ignores `.env*` files, but the app does not load a dotenv file on its own.
+`.gitignore` ignores `.env*` files, except `.env.example`. Copy it to `.env` for local development.
 
 ## Tests
 
@@ -359,12 +464,16 @@ Where tests live:
 | Search contracts | `src/shared/domain/repositories/__tests__/unit` |
 | User repository ports | `src/users/domain/repositories/__tests__/unit` |
 | In-memory adapters | `src/users/infrastructure/repositories/__tests__/unit` |
-| `SingUpUseCase` | `src/users/application/use-cases/__tests__/unit` |
+| User use cases | `src/users/application/use-cases/__tests__/unit` |
 | `BcryptHashProvider` | `src/users/infrastructure/providers/hash-provider/__tests__/unit` |
+| JWT adapter and guards | `src/auth/infrastructure/{providers,guards}/__tests__/unit` |
+| `LoginUseCase` | `src/auth/application/use-cases/__tests__/unit` |
 | Nest controller/service | `src/users/infrastructure/__tests__` |
-| E2E (`GET /`) | `test/app.e2e-spec.ts` |
+| Environment validation | `src/shared/infrastructure/config/__tests__` |
+| Exception filter | `src/shared/infrastructure/http/__tests__` |
+| E2E (hello, auth, users) | `test/app.e2e-spec.ts`, `test/users.e2e-spec.ts` |
 
-Domain and use-case tests talk to in-memory repositories and, for signup, a fake hash provider. They do not boot HTTP except for the Nest-generated controller/service specs and the e2e hello-world test.
+Domain and use-case tests talk to in-memory repositories and fake hash/token providers. E2E boots the real `AppModule` and covers login, protected routes, role checks, and the full Users REST surface.
 
 ## Architectural decisions
 
@@ -374,25 +483,32 @@ Domain and use-case tests talk to in-memory repositories and, for signup, a fake
 
 **Repository is not a generic CRUD.** `Repository` only has `insert` and `findById`. Search is a separate port. That keeps a read-only search implementation possible and stops every aggregate from inheriting the same update/delete semantics.
 
-**Hashing is an application port.** `SingUpUseCase` depends on `HashProvider`, not bcrypt. `BcryptHashProvider` is the adapter. Signup tests inject a fake provider and assert the stored password is the hash, not the raw input.
+**Hashing is an application port.** `SignupUseCase` and `LoginUseCase` depend on `HashProvider`, not bcrypt. `BcryptHashProvider` is the adapter. Tests inject a fake provider and assert the stored password is the hash, not the raw input.
 
-**In-memory first.** An in-memory adapter is enough to lock repository and use-case behavior. A SQL adapter can implement the same ports later without rewriting `User` or `SingUpUseCase`.
+**Authentication is a supporting module.** `src/auth` depends on the Users repository and hash contracts. Tokens are generated by `TokenProvider`, whose JWT adapter lives in auth infrastructure.
+
+**Authorization is split by concern.** Guards decide transport-level access (authenticated? role allowed?). Ownership and "only admins change roles" rules live in the use cases, where they can be tested without HTTP.
+
+**Default deny.** `JwtAuthGuard` and `RolesGuard` are global. New routes are protected unless explicitly marked `@Public()`, which avoids forgetting a guard on a new controller.
+
+**In-memory first.** An in-memory adapter is enough to lock repository and use-case behavior. A SQL adapter can implement the same ports later without rewriting `User`, `SignupUseCase`, or `LoginUseCase`.
 
 **NestJS is the delivery mechanism.** Modules and controllers compose the app. The domain layer can be unit-tested without creating a Nest testing module.
 
-Current gaps that follow from those choices, not from a different architecture:
+Current trade-offs that follow from those choices:
 
-- `UsersModule` does not bind repository or hash-provider implementations.
-- `UsersService` does not persist and does not call `SingUpUseCase`.
+- The role is embedded in the JWT, so a role change only takes effect when the user logs in again (or the short token expires).
+- There is no refresh token, revocation list, or password reset yet.
+- In-memory storage is single-process and loses data on restart.
 
 ## Roadmap
 
 Nothing here is scheduled. It is just what the code is already leaning toward:
 
-- wire `SingUpUseCase` (and later other use cases) to HTTP;
 - replace in-memory storage with a real database behind the same ports;
-- expose user search over the API;
-- introduce the tickets/syscalls bounded context that the repository name points to.
+- add refresh tokens, token revocation, and password reset;
+- introduce the tickets/syscalls bounded context that the repository name points to;
+- add OpenAPI/Swagger, health checks, and a CI pipeline.
 
 ## License
 
