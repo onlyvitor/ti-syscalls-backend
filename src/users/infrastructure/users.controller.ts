@@ -10,6 +10,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { Public } from 'src/auth/infrastructure/decorators/public.decorator';
 import { UsersService } from './users.service';
 import { CreateUserDto } from '../presentation/create-user.dto';
 import { UpdateUserDto } from '../presentation/update-user.dto';
@@ -19,6 +20,7 @@ import { SearchUsersQueryDto } from '../presentation/search-users.query.dto';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  @Public()
   @Post()
   create(@Body() createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);
