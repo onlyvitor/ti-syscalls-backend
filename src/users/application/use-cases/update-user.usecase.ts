@@ -1,3 +1,4 @@
+import { ForbiddenError } from 'src/shared/application/errors/forbidden.error';
 import { BadRequestException } from '../errors/bad-request.error';
 import { NotFoundException } from '../errors/not-found.error';
 import { UsersAlreadyExistError } from 'src/users/domain/errors/users-already-exist.error';
@@ -6,9 +7,11 @@ import { UserRole } from 'src/users/domain/entities/user.entity';
 import { Email } from 'src/users/domain/value-objects/email.vo';
 import { toOutputUserDto } from 'src/users/presentation/user-presenter';
 import { OutputUserDto } from 'src/users/presentation/outputuser.dto';
+import { Actor } from '../types/actor';
 
 export type UpdateUserUseCaseInput = {
   id: string;
+  actor: Actor;
   name?: string;
   email?: string;
   role?: UserRole;
@@ -21,6 +24,17 @@ export class UpdateUserUseCase {
     const user = await this.userRepository.findById(input.id);
     if (!user) {
       throw new NotFoundException(input.id);
+    }
+
+    const isSelf = input.actor.id === user.getId();
+    const isAdmin = input.actor.role === UserRole.ADMIN;
+
+    if (!isSelf && !isAdmin) {
+      throw new ForbiddenError('You can only update your own user');
+    }
+
+    if (!isAdmin && input.role !== undefined) {
+      throw new ForbiddenError('Only admins can change roles');
     }
 
     if (

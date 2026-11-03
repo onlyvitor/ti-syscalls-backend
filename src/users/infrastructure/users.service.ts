@@ -13,6 +13,7 @@ import {
 } from 'src/users/domain/repositories/searchable-user.repository';
 import { toOutputUserDto } from '../presentation/user-presenter';
 import { OutputUserDto } from '../presentation/outputuser.dto';
+import { Actor } from '../application/types/actor';
 
 export type SearchUsersOutput = {
   items: OutputUserDto[];
@@ -69,20 +70,21 @@ export class UsersService {
     };
   }
 
-  findOne(id: string) {
-    return this.getUserUseCase.execute({ id });
+  findOne(id: string, actor: Actor) {
+    return this.getUserUseCase.execute({ id, actor });
   }
 
-  update(id: string, updateUserDto: UpdateUserDto) {
+  update(id: string, updateUserDto: UpdateUserDto, actor: Actor) {
     return this.updateUserUseCase.execute({
       id,
+      actor,
       name: updateUserDto.name,
       email: updateUserDto.email,
       role: updateUserDto.role,
     });
   }
 
-  async remove(id: string): Promise<void> {
-    await this.deleteUserUseCase.execute({ id });
+  async remove(id: string, actor: Actor): Promise<void> {
+    await this.deleteUserUseCase.execute({ id, actor });
   }
 }
