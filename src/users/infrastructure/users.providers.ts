@@ -1,4 +1,6 @@
+import { ConfigService } from '@nestjs/config';
 import { HashProvider } from 'src/shared/application/providers/hash.provider';
+import { PrismaService } from 'src/shared/infrastructure/database/prisma.service';
 import { UserRepository } from 'src/users/domain/repositories/user.repository';
 import { SearchableUserRepository } from 'src/users/domain/repositories/searchable-user.repository';
 import { SignupUseCase } from 'src/users/application/use-cases/signup.usecase';
@@ -8,6 +10,7 @@ import { DeleteUserUseCase } from 'src/users/application/use-cases/delete-user.u
 import { SearchUsersUseCase } from 'src/users/application/use-cases/search-users.usecase';
 import { BcryptHashProvider } from './providers/hash-provider/bcrypt.hash.provider';
 import { InMemorySearchableUserRepository } from './repositories/in-memory-searchable-user.repository';
+import { PrismaSearchableUserRepository } from './repositories/prisma-searchable-user.repository';
 
 /**
  * Injection tokens. Repositories and providers are bound by string tokens so
@@ -19,8 +22,17 @@ export const HASH_PROVIDER = 'HASH_PROVIDER';
 
 const searchableUserRepositoryProvider = {
   provide: SEARCHABLE_USER_REPOSITORY,
-  useFactory: (): SearchableUserRepository =>
-    new InMemorySearchableUserRepository(),
+  useFactory: (
+    configService: ConfigService,
+    prisma: PrismaService,
+  ): SearchableUserRepository => {
+    if (configService.get<string>('PERSISTENCE', 'prisma') === 'in-memory') {
+      return new InMemorySearchableUserRepository();
+    }
+
+    return new PrismaSearchableUserRepository(prisma);
+  },
+  inject: [ConfigService, PrismaService],
 };
 
 const userRepositoryProvider = {
