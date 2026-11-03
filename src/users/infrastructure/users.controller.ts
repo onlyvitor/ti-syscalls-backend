@@ -12,7 +12,9 @@ import {
 } from '@nestjs/common';
 import { Public } from 'src/auth/infrastructure/decorators/public.decorator';
 import { CurrentUser } from 'src/auth/infrastructure/decorators/current-user.decorator';
+import { Roles } from 'src/auth/infrastructure/decorators/roles.decorator';
 import type { AuthTokenPayload } from 'src/auth/application/providers/token.provider';
+import { UserRole } from '../domain/entities/user.entity';
 import { UsersService } from './users.service';
 import { CreateUserDto } from '../presentation/create-user.dto';
 import { UpdateUserDto } from '../presentation/update-user.dto';
@@ -29,6 +31,7 @@ export class UsersController {
     return this.usersService.create(createUserDto);
   }
 
+  @Roles(UserRole.ADMIN, UserRole.TECHNICIAN)
   @Get()
   findAll(@Query() searchUsersQuery: SearchUsersQueryDto) {
     return this.usersService.search(searchUsersQuery);
@@ -55,6 +58,7 @@ export class UsersController {
     );
   }
 
+  @Roles(UserRole.ADMIN)
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(
