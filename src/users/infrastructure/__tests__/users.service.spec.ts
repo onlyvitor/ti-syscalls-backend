@@ -9,6 +9,7 @@ import { CreateUserDto } from '../../presentation/create-user.dto';
 import { UpdateUserDto } from '../../presentation/update-user.dto';
 import { SearchUsersQueryDto } from '../../presentation/search-users.query.dto';
 import { UserRole } from '../../domain/entities/user.entity';
+import { Actor } from '../../application/types/actor';
 
 type Executable = { execute: ReturnType<typeof jest.fn> };
 
@@ -43,6 +44,11 @@ describe('UsersService', () => {
     name: 'John Doe',
     email: 'john.doe@example.com',
     role: UserRole.USER,
+  };
+
+  const actor: Actor = {
+    id: 'admin-id',
+    role: UserRole.ADMIN,
   };
 
   describe('create', () => {
@@ -163,9 +169,12 @@ describe('UsersService', () => {
     it('should delegate to GetUserUseCase', async () => {
       getUserUseCase.execute.mockResolvedValueOnce(outputUser);
 
-      const result = await service.findOne('user-id');
+      const result = await service.findOne('user-id', actor);
 
-      expect(getUserUseCase.execute).toHaveBeenCalledWith({ id: 'user-id' });
+      expect(getUserUseCase.execute).toHaveBeenCalledWith({
+        id: 'user-id',
+        actor,
+      });
       expect(result).toEqual(outputUser);
     });
   });
@@ -182,10 +191,11 @@ describe('UsersService', () => {
         name: 'New Name',
       });
 
-      const result = await service.update('user-id', dto);
+      const result = await service.update('user-id', dto, actor);
 
       expect(updateUserUseCase.execute).toHaveBeenCalledWith({
         id: 'user-id',
+        actor,
         name: 'New Name',
         email: 'new.name@example.com',
         role: UserRole.ADMIN,
@@ -198,9 +208,12 @@ describe('UsersService', () => {
     it('should delegate to DeleteUserUseCase and resolve without content', async () => {
       deleteUserUseCase.execute.mockResolvedValueOnce(undefined);
 
-      const result = await service.remove('user-id');
+      const result = await service.remove('user-id', actor);
 
-      expect(deleteUserUseCase.execute).toHaveBeenCalledWith({ id: 'user-id' });
+      expect(deleteUserUseCase.execute).toHaveBeenCalledWith({
+        id: 'user-id',
+        actor,
+      });
       expect(result).toBeUndefined();
     });
   });

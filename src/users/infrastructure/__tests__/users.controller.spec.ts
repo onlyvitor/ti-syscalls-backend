@@ -2,9 +2,20 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UsersController } from '../users.controller';
 import { UsersService } from '../users.service';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import type { AuthTokenPayload } from 'src/auth/application/providers/token.provider';
+import { UserRole } from '../../domain/entities/user.entity';
 
 describe('UsersController', () => {
   let controller: UsersController;
+  const currentUser: AuthTokenPayload = {
+    sub: 'admin-id',
+    email: 'admin@example.com',
+    role: UserRole.ADMIN,
+  };
+  const actor = {
+    id: currentUser.sub,
+    role: currentUser.role,
+  };
   const mockService = {
     create: jest.fn(),
     search: jest.fn(),
@@ -61,31 +72,31 @@ describe('UsersController', () => {
     expect(result).toEqual({ items: [], total: 0 });
   });
 
-  it('should proxy findOne to UsersService with the raw id', () => {
+  it('should proxy findOne to UsersService with the raw id and actor', () => {
     mockService.findOne.mockReturnValue('user');
 
-    const result = controller.findOne('user-id');
+    const result = controller.findOne(currentUser, 'user-id');
 
-    expect(mockService.findOne).toHaveBeenCalledWith('user-id');
+    expect(mockService.findOne).toHaveBeenCalledWith('user-id', actor);
     expect(result).toBe('user');
   });
 
-  it('should forward update calls with the raw id', () => {
+  it('should forward update calls with the raw id and actor', () => {
     const dto = { name: 'Updated' };
     mockService.update.mockReturnValue('updated');
 
-    const result = controller.update('7', dto);
+    const result = controller.update(currentUser, '7', dto);
 
-    expect(mockService.update).toHaveBeenCalledWith('7', dto);
+    expect(mockService.update).toHaveBeenCalledWith('7', dto, actor);
     expect(result).toBe('updated');
   });
 
-  it('should forward remove calls with the raw id', () => {
+  it('should forward remove calls with the raw id and actor', () => {
     mockService.remove.mockReturnValue(undefined);
 
-    const result = controller.remove('user-id');
+    const result = controller.remove(currentUser, 'user-id');
 
-    expect(mockService.remove).toHaveBeenCalledWith('user-id');
+    expect(mockService.remove).toHaveBeenCalledWith('user-id', actor);
     expect(result).toBeUndefined();
   });
 });
