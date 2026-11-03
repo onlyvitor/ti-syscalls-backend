@@ -76,9 +76,7 @@ describe('LoginUseCase Unit Tests', () => {
       });
 
       expect(spy).toHaveBeenCalledWith(expect.any(Email));
-      expect((spy.mock.calls[0][0] as Email).valueOf()).toBe(
-        'john.doe@example.com',
-      );
+      expect(spy.mock.calls[0][0].valueOf()).toBe('john.doe@example.com');
     });
 
     it('should compare the provided password with the stored hash', async () => {

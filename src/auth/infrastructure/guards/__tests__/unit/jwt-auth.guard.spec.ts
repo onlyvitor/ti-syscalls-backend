@@ -2,10 +2,7 @@ import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { JwtAuthGuard } from '../../jwt-auth.guard';
-import type {
-  AuthTokenPayload,
-  TokenProvider,
-} from 'src/auth/application/providers/token.provider';
+import type { AuthTokenPayload } from 'src/auth/application/providers/token.provider';
 import { UserRole } from 'src/users/domain/entities/user.entity';
 
 const payload: AuthTokenPayload = {
@@ -40,10 +37,7 @@ describe('JwtAuthGuard Unit Tests', () => {
   beforeEach(() => {
     reflector = { getAllAndOverride: jest.fn() };
     tokenProvider = { generate: jest.fn(), verify: jest.fn() };
-    guard = new JwtAuthGuard(
-      reflector as unknown as Reflector,
-      tokenProvider as unknown as TokenProvider,
-    );
+    guard = new JwtAuthGuard(reflector as unknown as Reflector, tokenProvider);
   });
 
   it('should allow a route marked as public without a token', async () => {
