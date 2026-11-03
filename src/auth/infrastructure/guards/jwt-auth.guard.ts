@@ -1,11 +1,13 @@
 import {
   CanActivate,
   ExecutionContext,
+  Inject,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { TokenProvider } from 'src/auth/application/providers/token.provider';
+import { TOKEN_PROVIDER } from '../auth.providers';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 
 type AuthenticatedRequest = {
@@ -19,7 +21,7 @@ type AuthenticatedRequest = {
 export class JwtAuthGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
-    private readonly tokenProvider: TokenProvider,
+    @Inject(TOKEN_PROVIDER) private readonly tokenProvider: TokenProvider,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
