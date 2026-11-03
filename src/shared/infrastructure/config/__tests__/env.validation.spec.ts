@@ -1,7 +1,8 @@
 import { describe, expect, it } from '@jest/globals';
 import { validateEnv } from '../env.validation';
 
-const baseEnv = { JWT_SECRET: 'super-secret' };
+const databaseUrl = 'mysql://root:secret@127.0.0.1:3306/ti_syscalls';
+const baseEnv = { JWT_SECRET: 'super-secret', DATABASE_URL: databaseUrl };
 
 describe('validateEnv Unit Tests', () => {
   it('should require JWT_SECRET', () => {
@@ -17,7 +18,7 @@ describe('validateEnv Unit Tests', () => {
   });
 
   it('should trim the JWT secret', () => {
-    const env = validateEnv({ JWT_SECRET: '  secret  ' });
+    const env = validateEnv({ ...baseEnv, JWT_SECRET: '  secret  ' });
 
     expect(env.JWT_SECRET).toBe('secret');
   });
@@ -54,5 +55,64 @@ describe('validateEnv Unit Tests', () => {
     const env = validateEnv({ ...baseEnv, NODE_ENV: 'test' });
 
     expect(env.NODE_ENV).toBe('test');
+  });
+
+  describe('persistence', () => {
+    it('should default PERSISTENCE to prisma', () => {
+      const env = validateEnv(baseEnv);
+
+      expect(env.PERSISTENCE).toBe('prisma');
+    });
+
+    it('should require DATABASE_URL when using prisma', () => {
+      expect(() => validateEnv({ JWT_SECRET: 'super-secret' })).toThrow(
+        'DATABASE_URL environment variable is required when PERSISTENCE is "prisma"',
+      );
+    });
+
+    it('should reject a non-MySQL DATABASE_URL', () => {
+      expect(() =>
+        validateEnv({
+          ...baseEnv,
+          DATABASE_URL: 'postgresql://localhost:5432/app',
+        }),
+      ).toThrow(
+        'DATABASE_URL must be a MySQL connection string starting with mysql://',
+      );
+    });
+
+    it('should trim DATABASE_URL', () => {
+      const env = validateEnv({
+        ...baseEnv,
+        DATABASE_URL: `  ${databaseUrl}  `,
+      });
+
+      expect(env.DATABASE_URL).toBe(databaseUrl);
+    });
+
+    it('should accept the in-memory driver without DATABASE_URL', () => {
+      const env = validateEnv({
+        JWT_SECRET: 'super-secret',
+        PERSISTENCE: 'in-memory',
+      });
+
+      expect(env.PERSISTENCE).toBe('in-memory');
+      expect(env.DATABASE_URL).toBeUndefined();
+    });
+
+    it('should keep DATABASE_URL when the in-memory driver provides one', () => {
+      const env = validateEnv({
+        ...baseEnv,
+        PERSISTENCE: 'in-memory',
+      });
+
+      expect(env.DATABASE_URL).toBe(databaseUrl);
+    });
+
+    it('should reject an unknown persistence driver', () => {
+      expect(() => validateEnv({ ...baseEnv, PERSISTENCE: 'sqlite' })).toThrow(
+        'PERSISTENCE must be one of: prisma, in-memory',
+      );
+    });
   });
 });
