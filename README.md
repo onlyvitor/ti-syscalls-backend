@@ -12,7 +12,7 @@ The first bounded context in place is **Users**. Ticket management is the intend
 
 A support desk needs more than a ticket table. People sign up, emails have to be valid and unique, passwords cannot be stored in plain text, and roles change what someone is allowed to do later (`user`, `technician`, `admin`).
 
-That is the slice this backend currently models. HTTP exists as a NestJS REST API with signup, login, JWT authentication, and role/ownership authorization. Persistence is still in-memory.
+That is the slice this backend currently models. HTTP exists as a NestJS REST API with signup, login, JWT authentication, and role/ownership authorization. Users are persisted in MySQL through Prisma, and an in-memory driver is still available for tests and quick experiments.
 
 Who this code is for today:
 
@@ -27,7 +27,10 @@ What the code actually does today:
 - **User registration rules** — `SignupUseCase` validates required fields, normalizes email, rejects duplicates, hashes the password, and inserts the user through a repository port.
 - **Email as a value object** — trim, lowercase, format check, value equality.
 - **Password hashing** — `HashProvider` port with a `bcryptjs` adapter (cost factor 12).
-- **In-memory user persistence** — insert, find by id/email, list, update, delete.
+- **MySQL persistence** — Prisma adapters implement the same repository ports; schema and migrations live in `prisma/`.
+- **Selectable driver** — `PERSISTENCE=prisma` (default) or `PERSISTENCE=in-memory`.
+- **Initial admin seed** — `prisma/seed.ts` creates or promotes the first administrator, since registration always creates a `user`.
+- **In-memory user persistence** — kept as a test/development adapter with the same contract.
 - **Searchable users** — filter by query (name or email), name, email, and role; sort by `name`, `email`, or `role`; paginate (default page `1`, per page `15`).
 - **Users HTTP resource** — NestJS `UsersController` under `/users`. `POST` registers a user through `SignupUseCase`; `GET`, `PATCH`, and `DELETE` run their own use cases, with validation, pagination, filtering, and ordering.
 - **Authentication** — `POST /auth/login` verifies the password with bcrypt and issues a signed JWT.
@@ -38,9 +41,8 @@ What is **not** implemented:
 
 - ticket/syscall lifecycle;
 - refresh tokens, token revocation, or password reset;
-- PostgreSQL or any other database;
-- Docker;
-- OpenAPI/Swagger.
+- OpenAPI/Swagger;
+- automated backups, read replicas, or connection pooling tuning.
 
 ## Tech stack
 
@@ -54,11 +56,13 @@ Confirmed from `package.json` and source:
 | API style | REST |
 | Authentication | JWT (`@nestjs/jwt`) |
 | Configuration | `@nestjs/config` with boot-time validation |
+| Database | MySQL 8.0 |
+| Persistence | Prisma 6 (`prisma`, `@prisma/client`) |
 | Password hashing | `bcryptjs` |
-| Tests | Jest, ts-jest, Supertest |
+| Tests | Jest, ts-jest, Supertest, `mysql-memory-server` |
 | Lint / format | ESLint, Prettier |
 
-There is no ORM, migration tool, or container setup in this repository.
+Prisma 6.19 is pinned because Prisma 7/8 change the client and driver-adapter model. MySQL 8.0 is pinned because it is the version Prisma officially supports.
 
 ## Architecture
 
@@ -68,7 +72,7 @@ The code is organized so that:
 
 1. **Domain** owns the rules and the language of the model.
 2. **Application** orchestrates use cases against domain ports.
-3. **Infrastructure** adapts NestJS, in-memory storage, and bcrypt to those ports.
+3. **Infrastructure** adapts NestJS, MySQL via Prisma, in-memory storage, and bcrypt to those ports.
 
 Presentation is not a separate top-level folder. HTTP controllers and the NestJS `UsersService` live under `infrastructure`, which is how NestJS modules are currently composed.
 
@@ -89,9 +93,10 @@ flowchart TB
   loginUseCase --> hashPort
   loginUseCase --> tokenPort[TokenProvider]
 
-  repoImpl[InMemory*UserRepository] -.-> repoPort
+  repoImpl[Prisma / InMemory repositories] -.-> repoPort
   hashImpl[BcryptHashProvider] -.-> hashPort
   tokenImpl[JwtTokenProvider] -.-> tokenPort
+  repoImpl --> prismaClient[PrismaService / MySQL]
 
   subgraph domainLayer [Domain]
     domain
@@ -122,7 +127,8 @@ flowchart TB
 - `src/users/domain` does not import NestJS, bcrypt, JWT, or HTTP types.
 - Shared repository ports in `src/shared/domain/repositories` only talk about entities, ids, filters, and pagination.
 - Application code depends on those ports, not on a storage engine or token implementation.
-- Infrastructure implements the ports: `InMemoryUserRepository`, `InMemorySearchableUserRepository`, `BcryptHashProvider`, `JwtTokenProvider`.
+- Infrastructure implements the ports: `PrismaSearchableUserRepository`, `InMemorySearchableUserRepository`, `BcryptHashProvider`, `JwtTokenProvider`.
+- `PrismaService` lives in shared infrastructure; feature modules get it from a global `DatabaseModule`.
 - `src/auth` depends on the users domain/repository contracts, not the other way around.
 - NestJS stays at the edges: `AppModule`, `UsersModule`, `AuthModule`, controllers, and `UsersService`.
 
@@ -130,7 +136,7 @@ That is the dependency rule in practice: domain does not know how it is stored o
 
 ### Bounded context
 
-Only one business context exists: **Users**, under `src/users`. Authentication lives in `src/auth`, a supporting module that depends on Users. Shared kernel code lives in `src/shared` (repository contracts, `DomainError`, `HashProvider`, `ForbiddenError`, configuration).
+Only one business context exists: **Users**, under `src/users`. Authentication lives in `src/auth`, a supporting module that depends on Users. Shared kernel code lives in `src/shared` (repository contracts, `DomainError`, `HashProvider`, `ForbiddenError`, configuration, database client).
 
 `UserRole.TECHNICIAN` is a hint of the support-desk domain that is still missing. There is no tickets module.
 
@@ -162,6 +168,7 @@ src/
 │   │   └── repositories/          Repository, SearchableRepository
 │   └── infrastructure/
 │       ├── config/                boot-time environment validation
+│       ├── database/              PrismaService, DatabaseModule
 │       └── http/                  global exception filter
 └── users/
     ├── application/
@@ -175,14 +182,19 @@ src/
     │   └── value-objects/         Email
     ├── infrastructure/
     │   ├── providers/hash-provider/
-    │   ├── repositories/          in-memory adapters
+    │   ├── repositories/          Prisma and in-memory adapters + mapper
     │   ├── users.controller.ts
     │   ├── users.service.ts
     │   └── users.module.ts
     └── presentation/              DTOs and User output presenter
+
+prisma/
+├── schema.prisma                  datasource, enum and User model
+├── migrations/                    versioned SQL migrations
+└── seed.ts                        idempotent admin seed
 ```
 
-Tests sit next to the code they cover, usually under `__tests__/unit`. End-to-end tests live in `test/`.
+Tests sit next to the code they cover, usually under `__tests__/unit`. End-to-end tests live in `test/`, and integration tests that need a real MySQL live in `test/integration/`.
 
 ## Domain concepts
 
@@ -376,14 +388,62 @@ Removes a user. Requires `admin`. Returns `204`; unknown ids return `404`.
 
 ## Persistence
 
-There is no database in this project.
+MySQL is the production database. Prisma owns the schema, migrations, and query client.
 
-Users are kept in process memory:
+```
+HTTP -> use case -> UserRepository / SearchableUserRepository -> PrismaSearchableUserRepository -> PrismaService -> MySQL
+```
 
-- `InMemoryUserRepository` implements `UserRepository`;
-- `InMemorySearchableUserRepository` extends it and implements `SearchableUserRepository`.
+### Schema
 
-Data is lost when the process stops. That is enough to test repository contracts and use cases without coupling them to SQL.
+`prisma/schema.prisma` defines a `users` table with:
+
+- `id` — `CHAR(36)` UUID generated by the domain;
+- `name` — `VARCHAR(255)`;
+- `email` — `VARCHAR(320)`, unique;
+- `passwordHash` — `VARCHAR(255)`;
+- `role` — native MySQL `ENUM('user', 'technician', 'admin')`;
+- `createdAt` / `updatedAt` — `DATETIME(3)`.
+
+The e-mail index uses MySQL's default case-insensitive collation, which matches the domain behaviour (e-mails are normalized to lowercase before they are stored).
+
+### Adapters
+
+`PrismaSearchableUserRepository` implements the full `SearchableUserRepository` contract:
+
+- `insert`, `findById`, `findAll`, `findByEmail`, `update`, `delete`;
+- `search` builds `where`/`orderBy` in `prisma-user-query.ts` and runs `count` + `findMany` in one transaction.
+
+`update` and `delete` use `updateMany`/`deleteMany`, so a missing id is a no-op — exactly like the in-memory adapter. Existence is validated by the use case first.
+
+`PrismaUserMapper` translates rows to `User.reconstitute()` and back, keeping Prisma types out of the domain.
+
+### Driver selection
+
+`PERSISTENCE` chooses the adapter at runtime:
+
+| Value | Adapter | Requires `DATABASE_URL` |
+| ----- | ------- | ----------------------- |
+| `prisma` (default) | `PrismaSearchableUserRepository` | yes |
+| `in-memory` | `InMemorySearchableUserRepository` | no |
+
+`PrismaService` only calls `$connect()` when the Prisma driver is active, so unit and e2e suites do not need a database.
+
+### Migrations and seed
+
+```bash
+npm run db:generate   # regenerate the Prisma client
+npm run db:migrate    # create/apply a migration in development
+npm run db:deploy     # apply committed migrations (CI/production)
+npm run db:seed       # create or promote the initial admin
+npm run db:reset      # drop, re-apply migrations and re-seed
+```
+
+`db:seed` reads `ADMIN_NAME`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD`, hashes the password with bcrypt, and upserts by e-mail. It is idempotent and exists because `POST /users` always creates a `user` role. `db:reset` also runs the seed, so those variables must be set when using it.
+
+### In-memory adapter
+
+`InMemoryUserRepository` and `InMemorySearchableUserRepository` are still used by unit tests and can back the app with `PERSISTENCE=in-memory`. Data is lost when the process stops.
 
 ## Running locally
 
@@ -391,12 +451,29 @@ Data is lost when the process stops. That is enough to test repository contracts
 
 - Node.js 20+ (NestJS 11)
 - npm
+- MySQL 8.0 (Docker Compose is the easiest path; any reachable MySQL 8.0 server works)
 
 ### Install
 
 ```bash
 npm install
+npm run db:generate
 ```
+
+`db:generate` is explicit because some environments block npm postinstall hooks, which would otherwise leave `@prisma/client` without a generated client.
+
+### Database
+
+With Docker:
+
+```bash
+docker compose up -d mysql
+cp .env.example .env
+npm run db:deploy
+npm run db:seed
+```
+
+Without Docker, point `DATABASE_URL` at any MySQL 8.0 server and run `npm run db:deploy` and `npm run db:seed`.
 
 ### Development
 
@@ -429,7 +506,7 @@ npm run lint
 npm run format
 ```
 
-There is no Docker setup and no migration command.
+`docker-compose.yml` starts MySQL 8.0; `npm run db:migrate` is the development migration command.
 
 ## Environment variables
 
@@ -440,20 +517,28 @@ There is no Docker setup and no migration command.
 | `PORT` | HTTP port. Defaults to `3000`. | no |
 | `JWT_SECRET` | Secret used to sign and verify JWTs. | yes |
 | `JWT_EXPIRES_IN` | Token lifetime. Defaults to `1h`. | no |
+| `PERSISTENCE` | `prisma` (default) or `in-memory`. | no |
+| `DATABASE_URL` | MySQL connection string (`mysql://user:pass@host:3306/db`). Required when `PERSISTENCE=prisma`. | conditional |
+| `ADMIN_NAME` | Name used by the seed. Defaults to `Administrator`. | no |
+| `ADMIN_EMAIL` | E-mail of the seeded admin. | seed only |
+| `ADMIN_PASSWORD` | Password of the seeded admin (minimum 8 characters). | seed only |
 
 `.gitignore` ignores `.env*` files, except `.env.example`. Copy it to `.env` for local development.
 
 ## Tests
 
-Jest is configured in `package.json` (`rootDir: src`, files matching `.*\.spec\.ts$`). E2E uses `test/jest-e2e.json`.
+Jest is configured in `package.json` (`rootDir: src`, files matching `.*\.spec\.ts$`). E2E uses `test/jest-e2e.json`; integration tests use `test/integration/jest-integration.json`.
 
 ```bash
-npm test           # unit tests
+npm test               # unit tests
 npm run test:watch
 npm run test:cov
-npm run test:e2e
+npm run test:e2e       # in-memory driver, no database required
+npm run test:integration
 npm run test:debug
 ```
+
+`test:integration` starts a throwaway MySQL 8.0 server with `mysql-memory-server`, applies the committed migrations, and runs the Prisma adapters and the full `AppModule` against it. The first run downloads the MySQL binaries; later runs reuse the cache. Docker is not required.
 
 Where tests live:
 
@@ -464,6 +549,8 @@ Where tests live:
 | Search contracts | `src/shared/domain/repositories/__tests__/unit` |
 | User repository ports | `src/users/domain/repositories/__tests__/unit` |
 | In-memory adapters | `src/users/infrastructure/repositories/__tests__/unit` |
+| Prisma mapper/query | `src/users/infrastructure/repositories/__tests__/unit` |
+| Prisma lifecycle | `src/shared/infrastructure/database/__tests__/unit` |
 | User use cases | `src/users/application/use-cases/__tests__/unit` |
 | `BcryptHashProvider` | `src/users/infrastructure/providers/hash-provider/__tests__/unit` |
 | JWT adapter and guards | `src/auth/infrastructure/{providers,guards}/__tests__/unit` |
@@ -472,8 +559,9 @@ Where tests live:
 | Environment validation | `src/shared/infrastructure/config/__tests__` |
 | Exception filter | `src/shared/infrastructure/http/__tests__` |
 | E2E (hello, auth, users) | `test/app.e2e-spec.ts`, `test/users.e2e-spec.ts` |
+| Integration (Prisma + MySQL) | `test/integration/**/*.integration-spec.ts` |
 
-Domain and use-case tests talk to in-memory repositories and fake hash/token providers. E2E boots the real `AppModule` and covers login, protected routes, role checks, and the full Users REST surface.
+Domain and use-case tests talk to in-memory repositories and fake hash/token providers. E2E boots the real `AppModule` with the in-memory driver and covers login, protected routes, role checks, and the full Users REST surface. Integration tests boot the Prisma driver against real MySQL and verify the adapters, the mapper, migrations, and the application wiring end to end.
 
 ## Architectural decisions
 
@@ -491,7 +579,9 @@ Domain and use-case tests talk to in-memory repositories and fake hash/token pro
 
 **Default deny.** `JwtAuthGuard` and `RolesGuard` are global. New routes are protected unless explicitly marked `@Public()`, which avoids forgetting a guard on a new controller.
 
-**In-memory first.** An in-memory adapter is enough to lock repository and use-case behavior. A SQL adapter can implement the same ports later without rewriting `User`, `SignupUseCase`, or `LoginUseCase`.
+**Persistence is an adapter, not a domain concern.** The Prisma adapters implement the same ports as the in-memory ones. `User`, `Email`, `SignupUseCase`, and `LoginUseCase` did not change when MySQL arrived; only infrastructure and module composition did.
+
+**Two drivers on purpose.** `in-memory` keeps unit and e2e suites fast and independent of a database. `prisma` is the production path, covered by integration tests that run against real MySQL.
 
 **NestJS is the delivery mechanism.** Modules and controllers compose the app. The domain layer can be unit-tested without creating a Nest testing module.
 
@@ -499,16 +589,17 @@ Current trade-offs that follow from those choices:
 
 - The role is embedded in the JWT, so a role change only takes effect when the user logs in again (or the short token expires).
 - There is no refresh token, revocation list, or password reset yet.
-- In-memory storage is single-process and loses data on restart.
+- MySQL's default collation compares e-mails case-insensitively and ignores accents; the in-memory adapter only lowercases. Accented names can therefore match differently between the two drivers.
+- Unsorted searches fall back to `createdAt` then `id`, because a SQL table has no inherent insertion order.
 
 ## Roadmap
 
 Nothing here is scheduled. It is just what the code is already leaning toward:
 
-- replace in-memory storage with a real database behind the same ports;
 - add refresh tokens, token revocation, and password reset;
+- extend the admin seed and add a CLI for role management;
 - introduce the tickets/syscalls bounded context that the repository name points to;
-- add OpenAPI/Swagger, health checks, and a CI pipeline.
+- add OpenAPI/Swagger, health checks, and a CI pipeline that runs the integration suite.
 
 ## License
 
