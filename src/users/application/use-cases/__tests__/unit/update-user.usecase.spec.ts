@@ -8,11 +8,18 @@ import { User, UserRole } from '../../../../domain/entities/user.entity';
 import { BadRequestException } from '../../../errors/bad-request.error';
 import { UsersAlreadyExistError } from '../../../../domain/errors/users-already-exist.error';
 import { Email } from '../../../../domain/value-objects/email.vo';
+import { ForbiddenError } from 'src/shared/application/errors/forbidden.error';
 
 describe('UpdateUserUseCase Unit Tests', () => {
   let useCase: UpdateUserUseCase;
   let repository: InMemorySearchableUserRepository;
   let user: User;
+
+  const adminActor = { id: 'admin-id', role: UserRole.ADMIN };
+  const selfActor = (): { id: string; role: UserRole } => ({
+    id: user.getId(),
+    role: UserRole.USER,
+  });
 
   beforeEach(async () => {
     repository = new InMemorySearchableUserRepository();
@@ -29,7 +36,61 @@ describe('UpdateUserUseCase Unit Tests', () => {
     overrides: Partial<UpdateUserUseCaseInput> = {},
   ): UpdateUserUseCaseInput => ({
     id: user.getId(),
+    actor: adminActor,
     ...overrides,
+  });
+
+  describe('execute - authorization cases', () => {
+    it('should allow a user to update their own name and email', async () => {
+      const output = await useCase.execute(
+        validInput({
+          actor: selfActor(),
+          name: 'Johnny Doe',
+          email: 'johnny.doe@example.com',
+        }),
+      );
+
+      expect(output.name).toBe('Johnny Doe');
+      expect(output.email).toBe('johnny.doe@example.com');
+    });
+
+    it('should forbid a regular user from updating another user', async () => {
+      await expect(
+        useCase.execute(
+          validInput({
+            actor: { id: 'another-user-id', role: UserRole.USER },
+            name: 'Hacked',
+          }),
+        ),
+      ).rejects.toThrow(ForbiddenError);
+    });
+
+    it('should forbid a technician from updating another user', async () => {
+      await expect(
+        useCase.execute(
+          validInput({
+            actor: { id: 'technician-id', role: UserRole.TECHNICIAN },
+            name: 'Hacked',
+          }),
+        ),
+      ).rejects.toThrow(ForbiddenError);
+    });
+
+    it('should forbid a user from changing their own role', async () => {
+      await expect(
+        useCase.execute(
+          validInput({ actor: selfActor(), role: UserRole.ADMIN }),
+        ),
+      ).rejects.toThrow(ForbiddenError);
+    });
+
+    it('should allow an admin to update any user and change the role', async () => {
+      const output = await useCase.execute(
+        validInput({ role: UserRole.TECHNICIAN }),
+      );
+
+      expect(output.role).toBe(UserRole.TECHNICIAN);
+    });
   });
 
   describe('execute - error cases', () => {

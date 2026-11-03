@@ -4,12 +4,15 @@ import {
   DeleteUserUseCaseInput,
 } from '../../delete-user.usecase';
 import { InMemorySearchableUserRepository } from '../../../../infrastructure/repositories/in-memory-searchable-user.repository';
-import { User } from '../../../../domain/entities/user.entity';
+import { User, UserRole } from '../../../../domain/entities/user.entity';
+import { ForbiddenError } from 'src/shared/application/errors/forbidden.error';
 
 describe('DeleteUserUseCase Unit Tests', () => {
   let useCase: DeleteUserUseCase;
   let repository: InMemorySearchableUserRepository;
   let user: User;
+
+  const adminActor = { id: 'admin-id', role: UserRole.ADMIN };
 
   beforeEach(async () => {
     repository = new InMemorySearchableUserRepository();
@@ -24,11 +27,45 @@ describe('DeleteUserUseCase Unit Tests', () => {
 
   const validInput = (): DeleteUserUseCaseInput => ({
     id: user.getId(),
+    actor: adminActor,
+  });
+
+  describe('execute - authorization cases', () => {
+    it('should forbid a regular user from deleting a user', async () => {
+      await expect(
+        useCase.execute({
+          id: user.getId(),
+          actor: { id: user.getId(), role: UserRole.USER },
+        }),
+      ).rejects.toThrow(ForbiddenError);
+    });
+
+    it('should forbid a technician from deleting a user', async () => {
+      await expect(
+        useCase.execute({
+          id: user.getId(),
+          actor: { id: 'technician-id', role: UserRole.TECHNICIAN },
+        }),
+      ).rejects.toThrow(ForbiddenError);
+    });
+
+    it('should not delete the user when the actor is forbidden', async () => {
+      await expect(
+        useCase.execute({
+          id: user.getId(),
+          actor: { id: 'another-user-id', role: UserRole.USER },
+        }),
+      ).rejects.toThrow(ForbiddenError);
+
+      expect(await repository.findById(user.getId())).not.toBeNull();
+    });
   });
 
   describe('execute - error cases', () => {
     it('should throw NotFoundException when the user does not exist', async () => {
-      await expect(useCase.execute({ id: 'unknown-id' })).rejects.toEqual(
+      await expect(
+        useCase.execute({ id: 'unknown-id', actor: adminActor }),
+      ).rejects.toEqual(
         expect.objectContaining({
           name: 'NotFoundException',
           message: 'User not found',
@@ -37,9 +74,9 @@ describe('DeleteUserUseCase Unit Tests', () => {
     });
 
     it('should include the requested id in the error details', async () => {
-      await expect(useCase.execute({ id: 'unknown-id' })).rejects.toEqual(
-        expect.objectContaining({ details: 'unknown-id' }),
-      );
+      await expect(
+        useCase.execute({ id: 'unknown-id', actor: adminActor }),
+      ).rejects.toEqual(expect.objectContaining({ details: 'unknown-id' }));
     });
   });
 

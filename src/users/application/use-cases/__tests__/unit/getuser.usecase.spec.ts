@@ -3,11 +3,14 @@ import { GetUserUseCase, GetUserUseCaseInput } from '../../getuser.usecase';
 import { InMemoryUserRepository } from '../../../../infrastructure/repositories/in-memory-user.repository';
 import { User, UserRole } from '../../../../domain/entities/user.entity';
 import { NotFoundException } from '../../../errors/not-found.error';
+import { ForbiddenError } from 'src/shared/application/errors/forbidden.error';
 
 describe('GetUserUseCase Unit Tests', () => {
   let useCase: GetUserUseCase;
   let repository: InMemoryUserRepository;
   let user: User;
+
+  const adminActor = { id: 'admin-id', role: UserRole.ADMIN };
 
   beforeEach(async () => {
     repository = new InMemoryUserRepository();
@@ -22,6 +25,7 @@ describe('GetUserUseCase Unit Tests', () => {
 
   const validInput = (): GetUserUseCaseInput => ({
     id: user.getId(),
+    actor: adminActor,
   });
 
   describe('execute - success cases', () => {
@@ -61,24 +65,58 @@ describe('GetUserUseCase Unit Tests', () => {
       });
       await repository.insert(other);
 
-      const output = await useCase.execute({ id: other.getId() });
+      const output = await useCase.execute({
+        id: other.getId(),
+        actor: adminActor,
+      });
 
       expect(output.id).toBe(other.getId());
       expect(output.name).toBe(other.getName());
       expect(output.email).toBe(other.getEmail());
       expect(output.role).toBe(other.getRole());
     });
+
+    it('should allow a user to read their own data', async () => {
+      const output = await useCase.execute({
+        id: user.getId(),
+        actor: { id: user.getId(), role: UserRole.USER },
+      });
+
+      expect(output.id).toBe(user.getId());
+    });
+
+    it('should allow a technician to read another user', async () => {
+      const output = await useCase.execute({
+        id: user.getId(),
+        actor: { id: 'technician-id', role: UserRole.TECHNICIAN },
+      });
+
+      expect(output.id).toBe(user.getId());
+    });
+  });
+
+  describe('execute - authorization cases', () => {
+    it('should forbid a regular user from reading another user', async () => {
+      await expect(
+        useCase.execute({
+          id: user.getId(),
+          actor: { id: 'another-user-id', role: UserRole.USER },
+        }),
+      ).rejects.toThrow(ForbiddenError);
+    });
   });
 
   describe('execute - error cases', () => {
     it('should throw NotFoundException when the user does not exist', async () => {
-      await expect(useCase.execute({ id: 'unknown-id' })).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        useCase.execute({ id: 'unknown-id', actor: adminActor }),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should throw NotFoundException with the expected message', async () => {
-      await expect(useCase.execute({ id: 'unknown-id' })).rejects.toEqual(
+      await expect(
+        useCase.execute({ id: 'unknown-id', actor: adminActor }),
+      ).rejects.toEqual(
         expect.objectContaining({
           name: 'NotFoundException',
           message: 'User not found',
@@ -90,25 +128,25 @@ describe('GetUserUseCase Unit Tests', () => {
       const emptyRepository = new InMemoryUserRepository();
       const emptyUseCase = new GetUserUseCase(emptyRepository);
 
-      await expect(emptyUseCase.execute({ id: 'any-id' })).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        emptyUseCase.execute({ id: 'any-id', actor: adminActor }),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should throw NotFoundException for a valid but unknown uuid', async () => {
       const unknownId = '00000000-0000-4000-8000-000000000000';
 
-      await expect(useCase.execute({ id: unknownId })).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        useCase.execute({ id: unknownId, actor: adminActor }),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should not call findById more than once when the user is not found', async () => {
       const spy = jest.spyOn(repository, 'findById');
 
-      await expect(useCase.execute({ id: 'unknown-id' })).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        useCase.execute({ id: 'unknown-id', actor: adminActor }),
+      ).rejects.toThrow(NotFoundException);
 
       expect(spy).toHaveBeenCalledTimes(1);
     });
