@@ -63,6 +63,22 @@ describe('AppModule with Prisma persistence (integration)', () => {
     await database?.stop();
   });
 
+  it('should report the database as healthy', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/health')
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      status: 'ok',
+      checks: {
+        database: {
+          status: 'up',
+          driver: 'prisma',
+        },
+      },
+    });
+  });
+
   it('should register, authenticate and read the persisted user', async () => {
     const created = await createUser('persisted@example.com').expect(201);
     const user = created.body as UserOutput;

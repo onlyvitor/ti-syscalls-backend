@@ -20,7 +20,23 @@ describe('AppController (e2e)', () => {
     return request(app.getHttpServer())
       .get('/')
       .expect(200)
-      .expect('Hello World!');
+      .expect('health checker');
+  });
+
+  it('/health (GET) should report a healthy in-memory driver', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/health')
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      status: 'ok',
+      checks: {
+        database: {
+          status: 'skipped',
+          driver: 'in-memory',
+        },
+      },
+    });
   });
 
   afterEach(async () => {

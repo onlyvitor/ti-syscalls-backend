@@ -222,7 +222,16 @@ describe('Users (e2e)', () => {
       await request(app.getHttpServer())
         .get('/')
         .expect(200)
-        .expect('Hello World!');
+        .expect('health checker');
+    });
+
+    it('should keep GET /health public', async () => {
+      await request(app.getHttpServer())
+        .get('/health')
+        .expect(200)
+        .expect((response) => {
+          expect(response.body).toMatchObject({ status: 'ok' });
+        });
     });
 
     it('should keep POST /users public', async () => {

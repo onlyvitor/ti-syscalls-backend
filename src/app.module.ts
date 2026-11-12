@@ -5,6 +5,7 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/infrastructure/auth.module';
 import { validateEnv } from './shared/infrastructure/config/env.validation';
 import { DatabaseModule } from './shared/infrastructure/database/database.module';
+import { HealthModule } from './shared/infrastructure/health/health.module';
 import { UsersModule } from './users/infrastructure/users.module';
 
 @Module({
@@ -14,6 +15,7 @@ import { UsersModule } from './users/infrastructure/users.module';
       validate: validateEnv,
     }),
     DatabaseModule,
+    HealthModule,
     UsersModule,
     AuthModule,
   ],
