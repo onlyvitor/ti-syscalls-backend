@@ -1,0 +1,19 @@
+.git
+.gitignore
+node_modules
+dist
+coverage
+test
+*.log
+
+# Environment files (secrets must be injected at runtime)
+.env
+.env.*
+!.env.example
+
+# Local tooling / docs not needed to build the image
+Dockerfile
+.dockerignore
+docker-compose.yml
+README.md
+LICENSE

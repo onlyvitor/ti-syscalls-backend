@@ -1,4 +1,21 @@
 services:
+  app:
+    build: .
+    container_name: ti-syscalls-app
+    restart: unless-stopped
+    ports:
+      - '${APP_PORT:-3000}:3000'
+    environment:
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
+      PERSISTENCE: ${PERSISTENCE:-prisma}
+      DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD:-password}@mysql:3306/${MYSQL_DATABASE:-ti_syscalls}
+      RUN_MIGRATIONS: 'true'
+    depends_on:
+      mysql:
+        condition: service_healthy
+
   mysql:
     image: mysql:8.0
     container_name: ti-syscalls-mysql
