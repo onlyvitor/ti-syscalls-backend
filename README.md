@@ -297,6 +297,7 @@ Routes marked as public use `@Public()`. Protected routes return `401` without a
 | Endpoint | Public | `user` | `technician` | `admin` |
 | --- | --- | --- | --- | --- |
 | `GET /` | yes | — | — | — |
+| `GET /health` | yes | — | — | — |
 | `POST /auth/login` | yes | — | — | — |
 | `POST /users` | yes | — | — | — |
 | `GET /users` | no | no | yes | yes |
@@ -308,10 +309,35 @@ Routes marked as public use `@Public()`. Protected routes return `401` without a
 
 Health/hello endpoint from the Nest starter. Public.
 
-**Response:** `200` with body `Hello World!`
+**Response:** `200` with body `health checker`
 
 ```bash
 curl http://localhost:3000/
+```
+
+### `GET /health`
+
+Public readiness probe. When `PERSISTENCE=prisma`, it runs `SELECT 1` through Prisma, so it fails when the process is up but the database is unreachable. With `PERSISTENCE=in-memory`, the database check is reported as `skipped`.
+
+**Response:** `200` when healthy, `503` when the database check fails.
+
+```json
+{
+  "status": "ok",
+  "timestamp": "2026-11-12T12:00:00.000Z",
+  "uptimeSeconds": 42,
+  "checks": {
+    "database": {
+      "status": "up",
+      "driver": "prisma",
+      "latencyMs": 1.24
+    }
+  }
+}
+```
+
+```bash
+curl http://localhost:3000/health
 ```
 
 ### `POST /auth/login`
